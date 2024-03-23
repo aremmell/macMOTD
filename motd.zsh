@@ -34,6 +34,9 @@ zmodload zsh/files 2>/dev/null || true
 
 MOTD_FILE="/etc/motd"
 MOTD_TMP_FILE="/etc/motd.tmp"
+MOTD_LOG_FILE="/var/log/macMOTD.log"
+MOTD_REGEN_FREQUENCY="600"
+MOTD_MIN_FREQUENCY="10"
 UPDATE_MOTD_D="update-motd.d"
 MOTD_HELPERS="motd-helpers"
 UPDATE_MOTD_D_DEST="/etc/${UPDATE_MOTD_D}"
@@ -41,20 +44,26 @@ MOTD_HELPERS_DEST="${UPDATE_MOTD_D_DEST}/${MOTD_HELPERS}"
 LAUNCH_DAEMON_DIR="/Library/LaunchDaemons"
 LAUNCH_DAEMON_NAME="com.github.aremmell.macMOTD.plist"
 SYSTEM_BIN_DIR="/usr/local/bin"
-SCRIPT_NAME=$(basename ${0})
+SCRIPT_NAME="$(basename ${0})"
+SCRIPT_PATH="$(realpath $(dirname ${0}))"
+SCRIPT_DEPS=(
+    "${SCRIPT_PATH}/${MOTD_HELPERS}/motd-base.zsh"
+)
 
 # $1: log level (e.g. "debug", "info", "warn", "error")
 # $2: ANSI color code (e.g. "31")
 _mm_echo() {
     if [[ ${#@} -gt 2 ]]; then
-        printf "\033[0;%s;49m%s [%s]: %s\033[0m\n" "${2}" "${SCRIPT_NAME}" "${1}" "$@[3,-1]"
+        local padding=""
+        [[ ${#1} -lt 5 ]] && padding=" "
+        printf -v line "%s [%s]:%s %s" "$(date +"%d %h '%y %H:%M:%S %Z")" \
+            "${1}" "${padding}" "$@[3,-1]"
+        printf "\033[0;%s;49m%s\033[0m\n" "${2}" "${line}"
     fi
 }
 
 _mm_debug() {
-    if [[ ${_debug} = true ]]; then
-        _mm_echo "debug" "90" "$*"
-    fi
+    [[ ${_debug} = true ]] && _mm_echo "debug" "90" "$*"
 }
 
 _mm_info() {
@@ -188,17 +197,17 @@ read -r -d '' _ld_file_contents <<-EOF
         <key>ProgramArguments</key>
         <array>
             <string>zsh</string>
-            <string>/usr/local/bin/motd.zsh</string>
-            <string>--update</string>
+            <string>${SYSTEM_BIN_DIR}/motd.zsh</string>
+            <string>--generate</string>
         </array>
         <key>StartInterval</key>
-        <integer>600</integer>
+        <integer>${MOTD_REGEN_FREQUENCY}</integer>
         <key>RunAtLoad</key>
         <true />
         <key>StandardErrorPath</key>
-        <string>/dev/null</string>
+        <string>${MOTD_LOG_FILE}</string>
         <key>StandardOutPath</key>
-        <string>/dev/null</string>
+        <string>${MOTD_LOG_FILE}</string>
     </dict>
 </plist>
 EOF
@@ -213,8 +222,9 @@ EOF
             fi
         fi
 
-        _mm_debug "writing launch daemon file..."
-        if ! echo "${_ld_file_contents}" > "${ld_filename}"; then
+        _mm_debug "writing launch daemon file (log: '${MOTD_LOG_FILE}', frequency:" \
+                  "${MOTD_REGEN_FREQUENCY}sec)..."
+        if ! echo "${_ld_file_contents}" >! "${ld_filename}"; then
             _mm_error "failed to write launch daemon file (${ld_filename})!"
             false; return
         fi
@@ -226,7 +236,7 @@ EOF
             false; return
         fi
 
-        _mm_info "successfully loaded launch daemon; use 'TODO'."
+        _mm_info "successfully loaded launch daemon; run 'TODO'."
     fi
 
     local scripts_total=0
@@ -268,70 +278,123 @@ EOF
     fi
 }
 
+# $1: The CLI option that requires an argument.
+# $2: The expected argument.
+# $3: The current option/argument index.
+# $4: The total count of CLI arguments.
+_mm_validate_cli_arg() {
+    if [[ ${3} -gt ${4} ]] || [[ -z "${2}" ]]; then
+        _mm_error "required argument for '${1}' not found."
+        _print_usage=true
+        false; return
+    fi
+}
+
 _mm_print_usage() {
-    echo "Usage:"
-    printf "\t[-i|--install]\tInstalls %s before updating (implies --update)\n" \
-        "sample MOTD scripts, launch daemon, and this script"
-    printf "\t[-u|--update]\tGenerates %s by executing scripts in %s.\n" \
-        "${MOTD_FILE}" "${UPDATE_MOTD_D_DEST}"
-    echo "\t[-d|--debug]\tEnables debug mode, which produces more detailed output."
-    echo "\t[-h|--help]\tPrints this help message."
+    read -r -d '' usage_message <<-EOF
+Usage:
+    -i, --install          Installs and enables macMOTD on this machine, then generates the MOTD (implies -g/--generate)
+    -g, --generate         Generates the MOTD file by executing the scripts in ${UPDATE_MOTD_D_DEST}.
+    -l, --log       <path> Overrides the default log file path (${MOTD_LOG_FILE}).
+    -f, --frequency <secs> Overrides the default MOTD regeneration frequency (${MOTD_REGEN_FREQUENCY}sec).
+    -d, --debug            Enables debug mode, which produces more detailed output.
+    -h, --help             Prints this help message.
+EOF
+    echo "${usage_message}"
+    exit 1
 }
 
 _mm_main() {
-    if [[ ${EUID} -ne 0 ]]; then
-        _mm_error "this script must be executed by root or with sudo; exiting!"
-        false; return
-    fi
-
-    _mm_debug "debug mode enabled."
-
     if [[ ${_install} = true ]]; then
         _mm_update_motd true
-    elif [[ ${_update} = true ]]; then
+    elif [[ ${_generate} = true ]]; then
         _mm_update_motd false
     else
-        _mm_error "no command to execute!"
+        _mm_error "no command to execute (-i/--install or -g/--generate required)!"
         _mm_print_usage
-        false; return
     fi
 }
 
-_args=( "$@" )
-_update=false
-_install=false
-_print_usage=false
-_debug=false
-
-if [[ ! ${#_args[@]} -gt 0 ]]; then
-    _print_usage=true
-else
-    for arg in "${_args[@]}"; do
-        #_mm_echo "evaluating arg: '${arg}'..."
-        case ${arg} in
-            -i|--install)
-                _install=true
-            ;;
-            -u|--update)
-                _update=true
-            ;;
-            -d|--debug)
-                _debug=true
-            ;;
-            -h|--help)
-                _print_usage=true
-            ;;
-            *)
-                _mm_error "unknown option: ${arg}"
-                _print_usage=true
-            ;;
-        esac
+_mm_load_dependencies() {
+    for dep in "${SCRIPT_DEPS[@]}"; do
+        if ! source "${dep}" 2>/dev/null; then
+            _mm_error "failed to load dependency '${dep}'!"
+            false; return
+        fi
     done
-fi
+}
 
-if [[ ${_print_usage} = true ]]; then
-    _mm_print_usage
+###############################################################################
+# Entry point
+
+if [[ ${EUID} -ne 0 ]]; then
+    _mm_error "this script must be executed by root or with sudo; exiting!"
     exit 1
 fi
 
-_mm_main "${_install}"
+_mm_load_dependencies || exit 1
+
+_argv=("$@")
+_generate=false
+_install=false
+_debug=false
+
+_argc="${#_argv[@]}"
+[[ ${_argc} -gt 0 ]] || _mm_print_usage
+
+for (( i=0;i<=${_argc};i++ )); do
+    [[ -z "${_argv[i]}" ]] && continue
+    _mm_debug "evaluating option: '${_argv[i]}'..."
+    case ${_argv[i]} in
+        -i|--install)
+            _install=true
+        ;;
+        -g|--generate)
+            _generate=true
+        ;;
+        -d|--debug)
+            _debug=true
+            _mm_debug "debug mode enabled."
+        ;;
+        -l|--log)
+            if _mm_validate_cli_arg "${_argv[i]}" "${_argv[i+1]}" "${i}" "${_argc}"; then
+                if touch "${_argv[i+1]}" 2>/dev/null; then
+                    _mm_info "using log file '${_argv[i+1]}'."
+                    MOTD_LOG_FILE="${_argv[i+1]}"
+                else
+                    _mm_error "unable to write to requested log file '${_argv[i+1]}'!"
+                    _mm_print_usage
+                fi
+                (( i++ ))
+                continue
+            fi
+        ;;
+        -f|--frequency)
+            if _mm_validate_cli_arg "${_argv[i]}" "${_argv[i+1]}" "${i}" "${_argc}"; then
+                if mm_is_number "${_argv[i+1]}"; then
+                    if [[ ${_argv[i+1]} -ge ${MOTD_MIN_FREQUENCY} ]]; then
+                        _mm_info "using regeneration frequency ${_argv[i+1]}sec."
+                        MOTD_REGEN_FREQUENCY="${_argv[i+1]}"
+                    else
+                        _mm_error "the minimum regeneration frequency is ${MOTD_MIN_FREQUENCY}sec."
+                        _mm_print_usage
+                    fi
+                else
+                    _mm_error "invalid argument for '${_argv[i]}'; not a number!"
+                    _mm_print_usage
+                fi
+                (( i++ ))
+                continue
+            fi
+        ;;
+        -h|--help)
+            _mm_print_usage
+        ;;
+        *)
+            _mm_error "unknown option: ${arg}"
+            _mm_print_usage
+        ;;
+    esac
+done
+
+_mm_main

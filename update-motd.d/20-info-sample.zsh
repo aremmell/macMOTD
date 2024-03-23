@@ -36,7 +36,7 @@
 # See the comment in '10-header-sample.zsh' for more information.
 #
 
-source "$(dirname ${0})/motd-helpers/motd-base.zsh" || exit 1
+source "$(realpath $(dirname ${0}))/motd-helpers/motd-base.zsh" || exit 1
 
 # the lines I like in my MOTD.
 declare -a lines=(

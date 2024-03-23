@@ -66,7 +66,7 @@
 # you can just execute this script from a terminal and observe the output.
 #
 
-source "$(dirname ${0})/motd-helpers/motd-base.zsh" || exit 1
+source "$(realpath $(dirname ${0}))/motd-helpers/motd-base.zsh" || exit 1
 
 declare -a test_lines=(
     "line 1"

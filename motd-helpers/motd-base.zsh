@@ -57,6 +57,5 @@ mm_print_hcenter() {
     declare -a text=(${(P)1})
     for (( i=0;i<=${#text[@]};i++ )); do
         printf "%*s\n" $(( (${#text[i]} + tput_cols) / 2)) "${text[i]}"
-        [[ ${i} -ge ${#text[@]} ]] && break
     done
 }
