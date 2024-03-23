@@ -30,8 +30,8 @@
 #
 ##############################################################################
 
-zmodload zsh/stat
-zmodload zsh/files
+zmodload zsh/stat 2>/dev/null || true
+zmodload zsh/files 2>/dev/null || true
 
 MOTD_FILE="/etc/motd"
 MOTD_TMP_FILE="/etc/motd.tmp"
