@@ -2,14 +2,13 @@
 
 ################################################################################
 #
-# macMOTD
-# Version: 1.0.0
+# This file is part of macMOTD (https://github.com/aremmell/macMOTD/)
+#
+# Version:   1.0.0
+# License:   MIT
+# Copyright: (c) 2024 Ryan M. Lederman <lederman@gmail.com>
 #
 ##############################################################################
-#
-# SPDX-License-Identifier: MIT
-#
-# Copyright (c) 2024 Ryan M. Lederman <lederman@gmail.com>
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy of
 # this software and associated documentation files (the "Software"), to deal in
@@ -36,7 +35,9 @@ zmodload zsh/files 2>/dev/null || true
 MOTD_FILE="/etc/motd"
 MOTD_TMP_FILE="/etc/motd.tmp"
 UPDATE_MOTD_D="update-motd.d"
-MOTD_SCRIPT_DIR="/etc/${UPDATE_MOTD_D}"
+MOTD_HELPERS="motd-helpers"
+UPDATE_MOTD_D_DEST="/etc/${UPDATE_MOTD_D}"
+MOTD_HELPERS_DEST="${UPDATE_MOTD_D_DEST}/${MOTD_HELPERS}"
 LAUNCH_DAEMON_DIR="/Library/LaunchDaemons"
 LAUNCH_DAEMON_NAME="com.github.aremmell.macMOTD.plist"
 SYSTEM_BIN_DIR="/usr/local/bin"
@@ -71,7 +72,6 @@ _mm_error() {
 _mm_prepare_temp_motd() {
     if [[ -f "${MOTD_TMP_FILE}" ]]; then
         _mm_debug "${MOTD_TMP_FILE} exists; removing..."
-
         if ! rm -f "${MOTD_TMP_FILE}" >/dev/null 2>&1; then
             _mm_error "failed to remove ${MOTD_TMP_FILE}!"
             false; return
@@ -97,42 +97,53 @@ _mm_update_motd_from_temp() {
     sync
 }
 
-_mm_prepare_motd_script_dir() {
-    if [[ ! -d "${MOTD_SCRIPT_DIR}" ]] && \
-       ! mkdir -p "${MOTD_SCRIPT_DIR}" >/dev/null 2>&1; then
-        _mm_error "failed to create ${MOTD_SCRIPT_DIR}!"
+_mm_prepare_update_motd_d_dest() {
+    if [[ ! -d "${UPDATE_MOTD_D_DEST}" ]] && \
+       ! mkdir -p "${UPDATE_MOTD_D_DEST}" >/dev/null 2>&1; then
+        _mm_error "failed to create ${UPDATE_MOTD_D_DEST}!"
         false; return
     fi
 }
 
-_mm_populate_motd_script_dir() {
-    _mm_debug "making scripts in ${UPDATE_MOTD_D} executable..."
-    if ! chmod 744 "${UPDATE_MOTD_D}/"*.zsh >/dev/null 2>&1; then
-        _mm_error "failed to set permissions on one or more scripts in ${MOTD_SCRIPT_DIR}!"
+# Makes executable, then copies all .zsh files from one directory to another.
+# $1: The source directory.
+# $2: The destination directory.
+_mm_deploy_scripts() {
+    if [[ -n "${2}" ]]; then
+        mkdir -p "${2}" 2>/dev/null
+    fi
+
+    if [[ ! -d "${1}" ]] || [[ ! -d "${2}" ]]; then
+        _nv_error "either the source or destination directory does not exist (" \
+                  "src: '${1}', dst: '${2}')!"
+        false; return
+    fi
+
+    _mm_debug "making scripts in ${1} executable..."
+    if ! chmod 744 "${1}/"*.zsh >/dev/null 2>&1; then
+        _mm_error "failed to set permissions on one or more scripts in ${1}!"
         false; return
     fi
 
     local scripts_copied=0
-    _mm_debug "copying scripts from ${UPDATE_MOTD_D} to ${MOTD_SCRIPT_DIR}..."
-    for f in ${UPDATE_MOTD_D}/*.zsh(*); do
-        _mm_debug "copying ${f} to ${MOTD_SCRIPT_DIR}..."
-        if ! cp -f "${f}" "${MOTD_SCRIPT_DIR}" >/dev/null 2>&1; then
-            _mm_error "failed to copy ${f} to ${MOTD_SCRIPT_DIR}!"
+    _mm_debug "copying scripts from ${1} to ${2}..."
+    for f in ${1}/*.zsh(*); do
+        _mm_debug "copying ${f} to ${2}..."
+        if ! cp -f "${f}" "${2}" >/dev/null 2>&1; then
+            _mm_error "failed to copy ${f} to ${2}!"
             false; return
         fi
         (( scripts_copied++ ))
     done
 
     if [[ ${scripts_copied} -gt 0 ]]; then
-        _mm_info "successfully copied ${scripts_copied} scripts to ${MOTD_SCRIPT_DIR}."
+        _mm_info "successfully copied ${scripts_copied} scripts to ${2}."
     else
-        _mm_error "no viable scripts (executable with .zsh extension) located in ${UPDATE_MOTD_D}!"
+        _mm_error "no viable scripts (executable with .zsh extension) located in ${1}!"
         false; return
     fi
 }
 
-# _mm_update_motd
-#
 # Optionally configures the MOTD system for use: installs sample scripts, copies
 # this script to a system bin directory, and installs/starts the launch daemon.
 # Otherwise, updates the MOTD by iterating over the relevant scripts and copying
@@ -140,16 +151,22 @@ _mm_populate_motd_script_dir() {
 #
 # $1: true = install *and* update, false = just update.
 _mm_update_motd() {
-    if ! _mm_prepare_temp_motd || ! _mm_prepare_motd_script_dir; then
+    if ! _mm_prepare_temp_motd || ! _mm_prepare_update_motd_d_dest; then
         false; return
     fi
 
     if [[ ${1} = true ]]; then
-        if ! _mm_populate_motd_script_dir; then
+        _mm_debug "copying scripts from ${UPDATE_MOTD_D} to ${UPDATE_MOTD_D_DEST}..."
+        if ! _mm_deploy_scripts "${UPDATE_MOTD_D}" "${UPDATE_MOTD_D_DEST}"; then
             false; return
         fi
 
-        _mm_debug "copying ${PWD}/${SCRIPT_NAME} to ${SYSTEM_BIN_DIR}..."
+        _mm_debug "copying scripts from ${MOTD_HELPERS} to ${MOTD_HELPERS_DEST}..."
+        if ! _mm_deploy_scripts "${MOTD_HELPERS}" "${MOTD_HELPERS_DEST}"; then
+            false; return
+        fi
+
+        _mm_debug "copying ${SCRIPT_NAME} to ${SYSTEM_BIN_DIR}..."
         if ! cp -f "${SCRIPT_NAME}" "${SYSTEM_BIN_DIR}" >/dev/null 2>&1; then
             _mm_error "failed to copy ${SCRIPT_NAME} to ${SYSTEM_BIN_DIR}!"
             false; return
@@ -215,7 +232,7 @@ EOF
     local scripts_total=0
     local scripts_failed=0
 
-    for s in ${MOTD_SCRIPT_DIR}/*.zsh(.); do
+    for s in ${UPDATE_MOTD_D_DEST}/*.zsh(.); do
         (( scripts_total++ ))
 
         if [[ -x "${s}" ]]; then
@@ -233,7 +250,7 @@ EOF
     local scripts_successful=$(( $scripts_total - $scripts_failed ))
 
     if [[ ${scripts_total} -eq 0 ]]; then
-        _mm_error "no viable scripts (executable with .zsh extension) located in ${MOTD_SCRIPT_DIR}!"
+        _mm_error "no viable scripts (executable with .zsh extension) located in ${UPDATE_MOTD_D_DEST}!"
     else
         if [[ ${scripts_successful} -gt 0 ]]; then
             _mm_info "successfully executed ${scripts_successful}/${scripts_total} scripts."
@@ -256,7 +273,7 @@ _mm_print_usage() {
     printf "\t[-i|--install]\tInstalls %s before updating (implies --update)\n" \
         "sample MOTD scripts, launch daemon, and this script"
     printf "\t[-u|--update]\tGenerates %s by executing scripts in %s.\n" \
-        "${MOTD_FILE}" "${MOTD_SCRIPT_DIR}"
+        "${MOTD_FILE}" "${UPDATE_MOTD_D_DEST}"
     echo "\t[-d|--debug]\tEnables debug mode, which produces more detailed output."
     echo "\t[-h|--help]\tPrints this help message."
 }

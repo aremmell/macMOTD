@@ -29,21 +29,34 @@
 #
 ##############################################################################
 
-#
-# This is a sample script for use with the dynamic MOTD (Message of the Day)
-# feature provided by this library.
-#
-# See the comment in '10-header-sample.zsh' for more information.
-#
+##############################################################################
+# Global variables
 
-source "$(dirname ${0})/motd-helpers/motd-base.zsh" || exit 1
+readonly MM_DEFAULT_MIN_COLS="90"
 
-# the lines I like in my MOTD.
-declare -a lines=(
-    "$(uptime | sed -E 's/[0-9]{1,2}:[0-9]{1,2}  //g')"
-    "$(date)"
-)
+##############################################################################
+# Helper functions
 
-# print centered lines.
-mm_print_hcenter "lines"
-echo "\n"
+# Determines whether the input is numeric (only contains characters 0-9) or not.
+# $1: Variable to inspect
+mm_is_number() {
+    [[ ${1} =~ ^[0-9]+$ ]]
+}
+
+# Prints center-justified lines of text, given a number of columns wide the
+# display area is.
+# $1: The name of a variable containing an array of lines to print.
+# $2: The lowest number of columns to use (leave empty to use MM_DEFAULT_MIN_COLS).
+mm_print_hcenter() {
+    local min_cols="${MM_DEFAULT_MIN_COLS}"
+    mm_is_number "${1}" && min_cols="${1}"
+
+    local tput_cols="$(tput -Txterm-256color cols)"
+    [[ "${tput_cols}" -lt ${min_cols} ]] && tput_cols="${min_cols}"
+
+    declare -a text=(${(P)1})
+    for (( i=0;i<=${#text[@]};i++ )); do
+        printf "%*s\n" $(( (${#text[i]} + tput_cols) / 2)) "${text[i]}"
+        [[ ${i} -ge ${#text[@]} ]] && break
+    done
+}

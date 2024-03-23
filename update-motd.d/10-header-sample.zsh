@@ -1,5 +1,34 @@
 #!/usr/bin/env zsh
 
+################################################################################
+#
+# This file is part of macMOTD (https://github.com/aremmell/macMOTD/)
+#
+# Version:   1.0.0
+# License:   MIT
+# Copyright: (c) 2024 Ryan M. Lederman <lederman@gmail.com>
+#
+##############################################################################
+#
+# Permission is hereby granted, free of charge, to any person obtaining a copy of
+# this software and associated documentation files (the "Software"), to deal in
+# the Software without restriction, including without limitation the rights to
+# use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of
+# the Software, and to permit persons to whom the Software is furnished to do so,
+# subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in all
+# copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
+# FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
+# COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
+# IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
+# CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+#
+##############################################################################
+
 #
 # This is a sample script for use with the dynamic MOTD (Message of the Day)
 # feature provided by this library.
@@ -37,18 +66,13 @@
 # you can just execute this script from a terminal and observe the output.
 #
 
-# try to determine a good guesstimate for terminal column count, since
-# we're not running under a terminal.
-_columns="$(tput -Txterm-256color cols)"
-if [ "${_columns}" -lt 90 ]; then
-    _columns="90"
-fi
+source "$(dirname ${0})/motd-helpers/motd-base.zsh" || exit 1
 
-# we also don't have access to $PATH, so the following paths must be explicit.
-_figlet_path="/opt/homebrew/bin/figlet"
-_figlet_font_dir="/opt/homebrew/Cellar/toilet/0.3/share/figlet/"
+declare -a test_lines=(
+    "line 1"
+    "line 2"
+    "line 3"
+)
 
-# print the hostname in ASCII art.
-echo "\n"
-"${_figlet_path}" -w "${_columns}" -c -d "${_figlet_font_dir}" \
-    -f "smslant" "$(hostname)"
+mm_print_hcenter "test_lines"
+
