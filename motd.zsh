@@ -158,9 +158,9 @@ _mm_copy_script() {
             _mm_debug "${1} and ${2} are identical."
         else
             if [[ ${4} = true ]]; then
-                local backup_file="${2}-$(date -Iseconds)${MM_BACKUP_EXT}"
-                _mm_warn "${2} exists and is different than ${1}" \
-                            "; making backup at ${backup_file}..."
+                local backup_file="${2/.zsh/}-$(date -Iseconds)${MM_BACKUP_EXT}"
+                _mm_warn "${2} exists and is different than ${1};" \
+                         "making backup at ${backup_file}..."
                 if ! mv -f "${2}" "${backup_file}" >/dev/null 2>&1; then
                     _mm_error "failed to back up ${2} to ${backup_file}!"
                     false; return
@@ -235,7 +235,7 @@ _mm_deploy_scripts() {
     done
 
     if [[ $(( $scripts_copied + $scripts_skipped )) -eq 0 ]]; then
-        _mm_error "no viable scripts (executable with .zsh extension) located in ${1}!"
+        _mm_error "no viable scripts (executable .zsh) located in ${1}!"
         false; return
     fi
 }
