@@ -124,6 +124,18 @@ _mm_prepare_update_motd_d_dest() {
     fi
 }
 
+# Retrieves the 3-digit octal permissions of a file/directory.
+#
+# $1: The path of the file/directory whose permissions should be retrieved.
+# $2: The name of a variable that receives the permissions.
+_mm_get_octal_permissions() {
+    if ! stat -L -A cur_mode +mode "${1}"; then
+        false; return
+    fi
+    local tmp_mode=$(( [#8] $cur_mode ))
+    eval ${2}'="${${tmp_mode[${#tmp_mode}-2,-1]}}"'
+}
+
 # Copies a script from one location to another, unless the target file exists
 # and the files are identical. Sets permissions on the target file, and optionally
 # creates a backup of the target file if it exists and the files are not identical.
@@ -157,7 +169,7 @@ _mm_copy_script() {
         fi
     fi
 
-    ${(P)5}=${copy_required}
+    eval ${5}'=${copy_required}'
 
     if [[ ${copy_required} = true ]]; then
         _mm_debug "copying ${1} to ${2}..."
@@ -167,10 +179,9 @@ _mm_copy_script() {
         fi
     fi
 
-    stat -L -A cur_mode +mode "${2}"
-    local octal_mode=$(( [#8] $cur_mode ))
-    octal_mode="${octal_mode[${#octal_mode}-2,-1]}"
-    if [[ "${octal_mode}" != "${3}" ]]; then
+    octal_mode=""
+    if ! _mm_get_octal_permissions "${2}" "octal_mode" || \
+         [[ "${octal_mode}" != "${3}" ]]; then
         _mm_debug "setting permissions on ${2} (${octal_mode} -> ${3})..."
         if ! chmod "${3}" "${2}" >/dev/null 2>&1; then
             _mm_error "failed to set permissions on ${2}!"
@@ -206,12 +217,13 @@ _mm_deploy_scripts() {
 
     local scripts_copied=0
     local scripts_skipped=0
+
     _mm_debug "copying scripts from ${1} to ${2}..."
     for f in ${1}/*.zsh(*); do
         local src_file=$(basename "${f}")
         local dst_file="${2}/${src_file}"
         was_copied=false
-        if ! _mm_copy_script "${f}" "${dst_file}" "744" "was_copied"; then
+        if ! _mm_copy_script "${f}" "${dst_file}" "744" "true" "was_copied"; then
             break
         fi
 
@@ -285,7 +297,7 @@ _mm_update_motd() {
 
         was_copied=false
         if ! _mm_copy_script "${SCRIPT_NAME}" "${SYSTEM_BIN_DIR}/${SCRIPT_NAME}" \
-                "744" "was_copied"; then
+                "744" "false" "was_copied"; then
             false; return
         fi
 

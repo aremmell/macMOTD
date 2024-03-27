@@ -76,6 +76,7 @@ mm_is_number() {
 
 # Prints center-justified lines of text, given a number of columns wide the
 # display area is.
+#
 # $1: The name of a variable containing an array of lines to print.
 # $2: The lowest number of columns to use (leave empty to use MM_DEFAULT_MIN_COLS).
 mm_print_hcenter() {
