@@ -35,28 +35,25 @@ zmodload zsh/regex 2>/dev/null || true
 
 unsetopt case_match
 
-MOTD_FILE="/etc/motd"
-MOTD_TMP_FILE="/etc/motd.tmp"
-MOTD_LOG_FILE="/var/log/macMOTD.log"
-MOTD_REGEN_FREQUENCY="600"
-MOTD_MIN_FREQUENCY="10"
-UPDATE_MOTD_D="update-motd.d"
-MOTD_HELPERS="motd-helpers"
-UPDATE_MOTD_D_DEST="/etc/${UPDATE_MOTD_D}"
-MOTD_HELPERS_DEST="${UPDATE_MOTD_D_DEST}/${MOTD_HELPERS}"
-LAUNCH_DAEMON_DIR="/Library/LaunchDaemons"
-LAUNCH_DAEMON_NAME="com.github.aremmell.macMOTD"
-LAUNCH_DAEMON_PATH="${LAUNCH_DAEMON_DIR}/${LAUNCH_DAEMON_NAME}.plist"
-LAUNCH_DAEMON_INSTALL_CMD="bootstrap"
-LAUNCH_DAEMON_UNINSTALL_CMD="bootout"
-LAUNCH_DAEMON_ENABLE_CMD="enable"
-LAUNCH_DAEMON_DISABLE_CMD="disable"
-SYSTEM_BIN_DIR="/usr/local/bin"
-SCRIPT_NAME="$(basename ${0})"
-SCRIPT_PATH="$(realpath $(dirname ${0}))"
-SCRIPT_DEPS=(
-    "${SCRIPT_PATH}/${MOTD_HELPERS}/motd-base.zsh"
-)
+declare -r MOTD_FILE="/etc/motd"
+declare -r MOTD_TMP_FILE="/etc/motd.tmp"
+declare -r MOTD_LOG_FILE="/var/log/macMOTD.log"
+declare -r MOTD_REGEN_FREQUENCY="600"
+declare -r MOTD_MIN_FREQUENCY="10"
+declare -r UPDATE_MOTD_D="update-motd.d"
+declare -r MOTD_HELPERS="motd-helpers"
+declare -r UPDATE_MOTD_D_DEST="/etc/${UPDATE_MOTD_D}"
+declare -r MOTD_HELPERS_DEST="${UPDATE_MOTD_D_DEST}/${MOTD_HELPERS}"
+declare -r LAUNCH_DAEMON_PERMS="644"
+declare -r LAUNCH_DAEMON_DIR="/Library/LaunchDaemons"
+declare -r LAUNCH_DAEMON_NAME="com.github.aremmell.macMOTD"
+declare -r LAUNCH_DAEMON_FILE="${LAUNCH_DAEMON_DIR}/${LAUNCH_DAEMON_NAME}.plist"
+declare -r LAUNCH_DAEMON_INSTALL_CMD="bootstrap"
+declare -r LAUNCH_DAEMON_UNINSTALL_CMD="bootout"
+declare -r SYSTEM_BIN_DIR="/usr/local/bin"
+declare -r SCRIPT_PERMS="744"
+declare -r SCRIPT_NAME="$(basename ${0})"
+declare -r SCRIPT_PATH="$(realpath $(dirname ${0}))"
 
 # $1: log level (e.g. "debug", "info", "warn", "error")
 # $2: ANSI color code (e.g. "31")
@@ -124,6 +121,21 @@ _mm_prepare_update_motd_d_dest() {
     fi
 }
 
+# Prompts the user for input and will not return until valid input is received.
+#
+# $1: Prompt text.
+# $2: Regular expression used to validate input.
+# $3: The message to emit when input is invalid.
+_mm_prompt_user() {
+    while true; do
+        read "REPLY?${1}"
+        if [[ ${REPLY} =~ ${2} ]]; then
+            break
+        fi
+        echo "${3}"
+    done
+}
+
 # Retrieves the 3-digit octal permissions of a file/directory.
 #
 # $1: The path of the file/directory whose permissions should be retrieved.
@@ -136,6 +148,14 @@ _mm_get_octal_permissions() {
     print -v ${2} -- "${tmp_mode[${#tmp_mode}-2,-1]}"
 }
 
+# Creates a backup filename for the specified file.
+#
+# $1: File.
+# $2: Name of a variable that receives the backup filename.
+_mm_get_backup_filename() {
+    print -v ${2} -- "${1/.zsh/}-$(date -Iseconds)${MM_BACKUP_EXT}"
+}
+
 # Copies a script from one location to another, unless the target file exists
 # and the files are identical. Sets permissions on the target file, and optionally
 # creates a backup of the target file if it exists and the files are not identical.
@@ -144,8 +164,6 @@ _mm_get_octal_permissions() {
 # $2: The target file.
 # $3: The octal mode to set on the target file.
 # $4: Whether or not to create a backup of the target file as described above.
-# $5: The name of a variable that receives a boolean value indicating whether
-#     or not the file was copied.
 _mm_copy_script() {
     local copy_required=true
 
@@ -158,18 +176,18 @@ _mm_copy_script() {
             _mm_debug "${1} and ${2} are identical."
         else
             if [[ ${4} = true ]]; then
-                local backup_file="${2/.zsh/}-$(date -Iseconds)${MM_BACKUP_EXT}"
+                backup_file=""
+                _mm_get_backup_filename "${2}" "backup_file"
                 _mm_warn "${2} exists and is different than ${1};" \
                          "making backup at ${backup_file}..."
                 if ! mv -f "${2}" "${backup_file}" >/dev/null 2>&1; then
                     _mm_error "failed to back up ${2} to ${backup_file}!"
                     false; return
                 fi
+                _mm_debug "${2} -> ${backup_file}."
             fi
         fi
     fi
-
-    print -v ${5} -- ${copy_required}
 
     if [[ ${copy_required} = true ]]; then
         _mm_debug "copying ${1} to ${2}..."
@@ -215,64 +233,48 @@ _mm_deploy_scripts() {
         false; return
     fi
 
-    local scripts_copied=0
-    local scripts_skipped=0
+    local scripts_processed=0
 
     _mm_debug "copying scripts from ${1} to ${2}..."
     for f in ${1}/*.zsh(*); do
         local src_file=$(basename "${f}")
         local dst_file="${2}/${src_file}"
-        was_copied=false
-        if ! _mm_copy_script "${f}" "${dst_file}" "744" "true" "was_copied"; then
-            break
+
+        if ! _mm_copy_script "${f}" "${dst_file}" "${SCRIPT_PERMS}" "true"; then
+            false; return
         fi
 
-        if [[ ${was_copied} = true ]]; then
-            (( scripts_copied++ ))
-        else
-            (( scripts_skipped++ ))
-        fi
+        (( scripts_processed++ ))
     done
 
-    if [[ $(( $scripts_copied + $scripts_skipped )) -eq 0 ]]; then
+    if [[ ${scripts_processed} -eq 0 ]]; then
         _mm_error "no viable scripts (executable .zsh) located in ${1}!"
         false; return
     fi
 }
 
 # $1: The verb to use in log messages (e.g. 'install').
-# $2" The past tense form of $1 (e.g. 'installed').
 # $2: The launchctl subcommand.
 # $3: The remaining arguments to the subcommand.
 _mm_launch_daemon_operation() {
-    _mm_debug "${1}ing launch daemon; 'launchctl ${3} ${4}'..."
+    _mm_info "${1}ing launch daemon; 'launchctl ${2} ${3}'..."
 
-    if ! launchctl ${=3} ${=4}; then
-        _mm_error "failed to ${1} launch daemon (${LAUNCH_DAEMON_PATH})!"
+    if ! launchctl ${=2} ${=3}; then
+        _mm_error "failed to ${1} launch daemon (${LAUNCH_DAEMON_FILE})!"
         false; return
     fi
 
-    _mm_info "successfully ${2} launch daemon (${LAUNCH_DAEMON_PATH})."
+    _mm_info "successfully ${1}ed launch daemon (${LAUNCH_DAEMON_FILE})."
 }
 
 _mm_install_launch_daemon() {
-    _mm_launch_daemon_operation "install" "installed" \
-        "${LAUNCH_DAEMON_INSTALL_CMD}" "system ${LAUNCH_DAEMON_PATH}"
+    _mm_launch_daemon_operation "install" "${LAUNCH_DAEMON_INSTALL_CMD}" \
+        "system ${LAUNCH_DAEMON_FILE}"
 }
 
 _mm_uninstall_launch_daemon() {
-    _mm_launch_daemon_operation "uninstall" "uninstalled" \
-        "${LAUNCH_DAEMON_UNINSTALL_CMD}" "system ${LAUNCH_DAEMON_PATH}"
-}
-
-_mm_enable_launch_daemon() {
-    _mm_launch_daemon_operation "enable" "enabled" \
-        "${LAUNCH_DAEMON_ENABLE_CMD}" "system/${LAUNCH_DAEMON_NAME}"
-}
-
-_mm_disable_launch_daemon() {
-    _mm_launch_daemon_operation "disable" "disabled" \
-        "${LAUNCH_DAEMON_DISABLE_CMD}" "system/${LAUNCH_DAEMON_NAME}"
+    _mm_launch_daemon_operation "uninstall" "ed" "${LAUNCH_DAEMON_UNINSTALL_CMD}" \
+        "system ${LAUNCH_DAEMON_FILE}"
 }
 
 # Optionally configures the MOTD system for use: installs sample scripts, copies
@@ -295,9 +297,8 @@ _mm_update_motd() {
             false; return
         fi
 
-        was_copied=false
         if ! _mm_copy_script "${SCRIPT_NAME}" "${SYSTEM_BIN_DIR}/${SCRIPT_NAME}" \
-                "744" "false" "was_copied"; then
+                "${SCRIPT_PERMS}" "false"; then
             false; return
         fi
 
@@ -336,7 +337,7 @@ read -r -d '' _ld_file_contents <<-EOF
 </plist>
 EOF
 
-        if [[ -f "${LAUNCH_DAEMON_PATH}" ]]; then
+        if [[ -f "${LAUNCH_DAEMON_FILE}" ]]; then
             _mm_debug "launch daemon file is already present; executing uninstall" \
                       "command in case it's actively running..."
             if ! _mm_uninstall_launch_daemon; then
@@ -346,15 +347,15 @@ EOF
 
         _mm_debug "writing launch daemon file (log: '${MOTD_LOG_FILE}', frequency:" \
                   "${MOTD_REGEN_FREQUENCY}sec)..."
-        if ! echo "${_ld_file_contents}" >! "${LAUNCH_DAEMON_PATH}"; then
-            _mm_error "failed to write launch daemon file (${LAUNCH_DAEMON_PATH})!"
+        if ! echo "${_ld_file_contents}" >! "${LAUNCH_DAEMON_FILE}"; then
+            _mm_error "failed to write launch daemon file (${LAUNCH_DAEMON_FILE})!"
             false; return
         fi
 
-        _mm_debug "successfully wrote launch daemon file (${LAUNCH_DAEMON_PATH});" \
+        _mm_debug "successfully wrote launch daemon file (${LAUNCH_DAEMON_FILE});" \
                   "setting permissions..."
-        if ! chmod 644 "${LAUNCH_DAEMON_PATH}" >/dev/null 2>&1; then
-            _mm_error "failed to set permissions on ${LAUNCH_DAEMON_PATH}!"
+        if ! chmod "${LAUNCH_DAEMON_PERMS}" "${LAUNCH_DAEMON_FILE}" >/dev/null 2>&1; then
+            _mm_error "failed to set permissions on ${LAUNCH_DAEMON_FILE}!"
             false; return
         fi
 
@@ -382,7 +383,7 @@ EOF
 
     local scripts_successful=$(( $scripts_total - $scripts_failed ))
     if [[ ${scripts_total} -eq 0 ]]; then
-        _mm_error "no viable scripts (executable with .zsh extension) located in ${UPDATE_MOTD_D_DEST}!"
+        _mm_error "no viable scripts (executable .zsh) located in ${UPDATE_MOTD_D_DEST}!"
     else
         if [[ ${scripts_successful} -gt 0 ]]; then
             _mm_info "successfully executed ${scripts_successful}/${scripts_total} scripts."
@@ -401,16 +402,78 @@ EOF
 }
 
 _mm_uninstall() {
-    # 1. disable and bootout the launch daemon
-    # 2. delete:
-    #   - /etc/motd
-    #   - /etc/motd.tmp
-    #   - depending on the value of _uninstall_mode:
-    #     - leave /etc/update-motd.d/*.zsh alone;
-    #     - rename
-    #     - nuke
-    #   - launch daemon plist
-    #   - ourself?
+    local prompt_prefix="You are about to uninstall macMOTD"
+    if [[ ${_uninstall_mode} = MM_UNINSTALL_NUKE ]]; then
+        prompt_prefix="${prompt_prefix} in nuke mode. All scripts"
+        prompt_prefix="${prompt_prefix} in ${UPDATE_MOTD_D_DEST}"
+        prompt_prefix="${prompt_prefix} will be permanently deleted!"
+    else
+        prompt_prefix="${prompt_prefix}."
+    fi
+
+    _mm_debug "prompting user to ensure they wish to proceed with uninstall..."
+
+    _mm_prompt_user "${prompt_prefix} Proceed? [yes/no]: " "^(yes|no)$" \
+        "You must type the word 'yes' to proceed or 'no' to abort."
+
+    if [[ ${REPLY:l} != "yes" ]]; then
+        _mm_debug "aborting."
+        return
+    fi
+
+    _mm_info "uninstalling..."
+
+    if ! _mm_uninstall_launch_daemon; then
+        _mm_warn "a reboot may be required in order to stop the launch daemon."
+    fi
+
+    case ${_uninstall_mode} in
+        MM_UNINSTALL_LEAVE)
+            _mm_info "leaving scripts in ${UPDATE_MOTD_D_DEST} untouched."
+        ;;
+        MM_UNINSTALL_RENAME)
+            _mm_info "renaming scripts in ${UPDATE_MOTD_D_DEST}..."
+            local scripts_renamed=0
+            for s in ${UPDATE_MOTD_D_DEST}/*.zsh(.); do
+                backup_file=""
+                _mm_get_backup_filename "${s}" "backup_file"
+                if ! mv -f "${s}" "${backup_file}" >/dev/null 2>&1; then
+                    _mm_error "failed to rename ${s} to ${backup_file}!"
+                    continue
+                fi
+                _mm_info "${s} -> ${backup_file}."
+                (( scripts_renamed++ ))
+            done
+            _mm_info "renamed ${scripts_renamed} scripts."
+        ;;
+        MM_UNINSTALL_NUKE)
+            _mm_info "deleting ${UPDATE_MOTD_D_DEST}..."
+            if ! rm -rf "${UPDATE_MOTD_D_DEST}" >/dev/null 2>&1; then
+                _mm_error "failed to delete ${UPDATE_MOTD_D_DEST}!"
+            else
+                _mm_info "deleted ${UPDATE_MOTD_D_DEST}."
+            fi
+        ;;
+    esac
+
+    declare -ra _files_to_delete=(
+        "${LAUNCH_DAEMON_FILE}"
+        "${MOTD_FILE}"
+        "${MOTD_TMP_FILE}"
+        "${SYSTEM_BIN_DIR}/${SCRIPT_NAME}"
+    )
+
+    _mm_info "deleting remaining files..."
+
+    for f in "${_files_to_delete[@]}"; do
+        if ! rm -f "${f}" >/dev/null 2>&1; then
+            _mm_error "failed to delete ${f}!"
+            continue
+        fi
+        _mm_info "deleted ${f}."
+    done
+
+    _mm_info "successfully uninstalled macMOTD."
 }
 
 # $1: The curent option/argument index.
@@ -476,7 +539,7 @@ _mm_main() {
     elif [[ ${_generate} = true ]]; then
         _mm_update_motd false
     elif [[ ${_uninstall} = true ]]; then
-        _mm_warn "would be doing uninstall."
+        _mm_uninstall
     else
         _mm_error "no task to execute (${MM_INSTALL_SF}/${MM_INSTALL_LF}," \
                   "${MM_GENERATE_SF}/${MM_GENERATE_LF}, or" \
@@ -486,7 +549,15 @@ _mm_main() {
 }
 
 _mm_load_dependencies() {
-    for dep in "${SCRIPT_DEPS[@]}"; do
+    local -a script_deps=()
+
+    if [[ "${SCRIPT_PATH}" = "${SYSTEM_BIN_DIR}" ]]; then
+        script_deps+=("${MOTD_HELPERS_DEST}/motd-base.zsh")
+    else
+        script_deps+=("${SCRIPT_PATH}/${MOTD_HELPERS}/motd-base.zsh")
+    fi
+
+    for dep in "${script_deps[@]}"; do
         if ! source "${dep}" 2>/dev/null; then
             _mm_error "failed to load dependency '${dep}'!"
             false; return

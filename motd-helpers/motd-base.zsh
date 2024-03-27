@@ -32,28 +32,24 @@
 ##############################################################################
 # Global variables
 
-typeset -rx MM_DEFAULT_MIN_COLS="90"
-typeset -rx MM_BULLET_GLYPH="\xe2\x80\xa2"
+declare -rx MM_DEFAULT_MIN_COLS="90"
+declare -rx MM_BULLET_GLYPH="\xe2\x80\xa2"
 
-typeset -rx MM_ESC_EMPH="\x1b[3m"
-typeset -rx MM_ESC_EMPH_END="\x1b[23m"
+declare -rx MM_ESC_EMPH="\x1b[3m"
+declare -rx MM_ESC_EMPH_END="\x1b[23m"
 
-typeset -rxi \
+declare -rxi \
     MM_UNINSTALL_LEAVE=1 \
     MM_UNINSTALL_RENAME=2 \
     MM_UNINSTALL_NUKE=3
 
-typeset -rx \
+declare -rx \
     MM_INSTALL_SF="-i" \
     MM_INSTALL_LF="--install" \
     MM_GENERATE_SF="-g" \
     MM_GENERATE_LF="--generate" \
     MM_UNINSTALL_SF="-u" \
     MM_UNINSTALL_LF="--uninstall" \
-    MM_DISABLE_SF="-D" \
-    MM_DISABLE_LF="--disable" \
-    MM_ENABLE_SF="-e" \
-    MM_ENABLE_LF="--enable" \
     MM_LOG_SF="-l" \
     MM_LOG_LF="--log" \
     MM_FREQUENCY_SF="-f" \
@@ -63,7 +59,7 @@ typeset -rx \
     MM_HELP_SF="-h" \
     MM_HELP_LF="--help"
 
-typeset -rx MM_BACKUP_EXT=".bak"
+declare -rx MM_BACKUP_EXT=".bak"
 
 ##############################################################################
 # Helper functions
