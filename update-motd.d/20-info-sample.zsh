@@ -40,7 +40,7 @@ source "$(realpath $(dirname ${0}))/motd-helpers/motd-base.zsh" || exit 1
 
 # the lines I like in my MOTD.
 declare -a lines=(
-    "$(uptime | sed -E 's/[0-9]{1,2}:[0-9]{1,2}  //g')"
+    "$(uptime | sed -E -e 's/[0-9]{1,2}:[0-9]{1,2}  //g' -e 's/up  /up /g')"
     "$(date)"
 )
 
