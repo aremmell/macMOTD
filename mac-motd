@@ -8,7 +8,7 @@
 # License:   MIT
 # Copyright: (c) 2024 Ryan M. Lederman <lederman@gmail.com>
 #
-##############################################################################
+################################################################################
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy of
 # this software and associated documentation files (the "Software"), to deal in
@@ -27,7 +27,7 @@
 # IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 # CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #
-##############################################################################
+################################################################################
 
 zmodload zsh/stat 2>/dev/null || true
 zmodload zsh/files 2>/dev/null || true
@@ -352,11 +352,19 @@ EOF
             false; return
         fi
 
-        _mm_debug "successfully wrote launch daemon file (${LAUNCH_DAEMON_FILE});" \
-                  "setting permissions..."
-        if ! chmod "${LAUNCH_DAEMON_PERMS}" "${LAUNCH_DAEMON_FILE}" >/dev/null 2>&1; then
-            _mm_error "failed to set permissions on ${LAUNCH_DAEMON_FILE}!"
-            false; return
+        _mm_debug "successfully wrote launch daemon file (${LAUNCH_DAEMON_FILE})"
+
+        octal_mode=""
+        if ! _mm_get_octal_permissions "${LAUNCH_DAEMON_FILE}" "octal_mode" || \
+            [[ "${octal_mode}" != "${LAUNCH_DAEMON_PERMS}" ]]; then
+            _mm_debug "setting permissions on ${LAUNCH_DAEMON_FILE} (${octal_mode}" \
+                      "-> ${LAUNCH_DAEMON_PERMS})..."
+            if ! chmod "${LAUNCH_DAEMON_PERMS}" "${LAUNCH_DAEMON_FILE}" >/dev/null 2>&1; then
+                _mm_error "failed to set permissions on ${LAUNCH_DAEMON_FILE}!"
+                false; return
+            fi
+        else
+            _mm_debug "permissions on ${LAUNCH_DAEMON_FILE} are already ${LAUNCH_DAEMON_PERMS}."
         fi
 
         if ! _mm_install_launch_daemon; then
@@ -565,7 +573,7 @@ _mm_load_dependencies() {
     done
 }
 
-###############################################################################
+################################################################################
 # Entry point
 
 if [[ ${EUID} -ne 0 ]]; then

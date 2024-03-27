@@ -8,7 +8,7 @@
 # License:   MIT
 # Copyright: (c) 2024 Ryan M. Lederman <lederman@gmail.com>
 #
-##############################################################################
+################################################################################
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy of
 # this software and associated documentation files (the "Software"), to deal in
@@ -27,9 +27,9 @@
 # IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 # CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #
-##############################################################################
+################################################################################
 
-##############################################################################
+################################################################################
 # Global variables
 
 declare -rx MM_DEFAULT_MIN_COLS="90"
@@ -61,7 +61,7 @@ declare -rx \
 
 declare -rx MM_BACKUP_EXT=".bak"
 
-##############################################################################
+################################################################################
 # Helper functions
 
 # Determines whether the input is numeric (only contains characters 0-9) or not.

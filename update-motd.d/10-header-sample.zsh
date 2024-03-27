@@ -8,7 +8,7 @@
 # License:   MIT
 # Copyright: (c) 2024 Ryan M. Lederman <lederman@gmail.com>
 #
-##############################################################################
+################################################################################
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy of
 # this software and associated documentation files (the "Software"), to deal in
@@ -27,7 +27,7 @@
 # IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 # CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #
-##############################################################################
+################################################################################
 
 #
 # This is a sample script for use with the dynamic MOTD (Message of the Day)
