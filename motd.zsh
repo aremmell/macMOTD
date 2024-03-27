@@ -133,7 +133,7 @@ _mm_get_octal_permissions() {
         false; return
     fi
     local tmp_mode=$(( [#8] $cur_mode ))
-    eval ${2}'="${${tmp_mode[${#tmp_mode}-2,-1]}}"'
+    print -v ${2} -- "${tmp_mode[${#tmp_mode}-2,-1]}"
 }
 
 # Copies a script from one location to another, unless the target file exists
@@ -169,7 +169,7 @@ _mm_copy_script() {
         fi
     fi
 
-    eval ${5}'=${copy_required}'
+    print -v ${5} -- ${copy_required}
 
     if [[ ${copy_required} = true ]]; then
         _mm_debug "copying ${1} to ${2}..."
