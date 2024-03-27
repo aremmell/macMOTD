@@ -273,7 +273,7 @@ _mm_install_launch_daemon() {
 }
 
 _mm_uninstall_launch_daemon() {
-    _mm_launch_daemon_operation "uninstall" "ed" "${LAUNCH_DAEMON_UNINSTALL_CMD}" \
+    _mm_launch_daemon_operation "uninstall" "${LAUNCH_DAEMON_UNINSTALL_CMD}" \
         "system ${LAUNCH_DAEMON_FILE}"
 }
 
