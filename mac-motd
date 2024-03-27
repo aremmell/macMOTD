@@ -54,6 +54,7 @@ declare -r SYSTEM_BIN_DIR="/usr/local/bin"
 declare -r SCRIPT_PERMS="744"
 declare -r SCRIPT_NAME="$(basename ${0})"
 declare -r SCRIPT_PATH="$(realpath $(dirname ${0}))"
+declare -a SCRIPT_DEPS=()
 
 # $1: log level (e.g. "debug", "info", "warn", "error")
 # $2: ANSI color code (e.g. "31")
@@ -293,7 +294,8 @@ _mm_update_motd() {
             false; return
         fi
 
-        if ! _mm_deploy_scripts "${MOTD_HELPERS}" "${MOTD_HELPERS_DEST}"; then
+        if ! _mm_deploy_scripts "${UPDATE_MOTD_D}/${MOTD_HELPERS}" \
+            "${MOTD_HELPERS_DEST}"; then
             false; return
         fi
 
@@ -557,15 +559,13 @@ _mm_main() {
 }
 
 _mm_load_dependencies() {
-    local -a script_deps=()
-
     if [[ "${SCRIPT_PATH}" = "${SYSTEM_BIN_DIR}" ]]; then
-        script_deps+=("${MOTD_HELPERS_DEST}/motd-base.zsh")
+        SCRIPT_DEPS+=("${MOTD_HELPERS_DEST}/motd-base.zsh")
     else
-        script_deps+=("${SCRIPT_PATH}/${MOTD_HELPERS}/motd-base.zsh")
+        SCRIPT_DEPS+=("${SCRIPT_PATH}/${UPDATE_MOTD_D}/${MOTD_HELPERS}/motd-base.zsh")
     fi
 
-    for dep in "${script_deps[@]}"; do
+    for dep in "${SCRIPT_DEPS[@]}"; do
         if ! source "${dep}" 2>/dev/null; then
             _mm_error "failed to load dependency '${dep}'!"
             false; return
