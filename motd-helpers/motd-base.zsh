@@ -63,6 +63,8 @@ typeset -rx \
     MM_HELP_SF="-h" \
     MM_HELP_LF="--help"
 
+typeset -rx MM_BACKUP_EXT=".bak"
+
 ##############################################################################
 # Helper functions
 

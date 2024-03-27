@@ -124,7 +124,73 @@ _mm_prepare_update_motd_d_dest() {
     fi
 }
 
-# Makes executable, then copies all .zsh files from one directory to another.
+# Copies a script from one location to another, unless the target file exists
+# and the files are identical. Sets permissions on the target file, and optionally
+# creates a backup of the target file if it exists and the files are not identical.
+#
+# $1: The source file.
+# $2: The target file.
+# $3: The octal mode to set on the target file.
+# $4: Whether or not to create a backup of the target file as described above.
+# $5: The name of a variable that receives a boolean value indicating whether
+#     or not the file was copied.
+_mm_copy_script() {
+    local copy_required=true
+
+    if [[ -f "${2}" ]]; then
+        local src_sum=$(shasum -a 256 "${1}" | awk '{ print $1; }' )
+        local dst_sum=$(shasum -a 256 "${2}" | awk '{ print $1; }' )
+
+        if [[ "${src_sum}" = "${dst_sum}" ]]; then
+            copy_required=false
+            _mm_debug "${1} and ${2} are identical."
+        else
+            if [[ ${4} = true ]]; then
+                local backup_file="${2}-$(date -Iseconds)${MM_BACKUP_EXT}"
+                _mm_warn "${2} exists and is different than ${1}" \
+                            "; making backup at ${backup_file}..."
+                if ! mv -f "${2}" "${backup_file}" >/dev/null 2>&1; then
+                    _mm_error "failed to back up ${2} to ${backup_file}!"
+                    false; return
+                fi
+            fi
+        fi
+    fi
+
+    ${(P)5}=${copy_required}
+
+    if [[ ${copy_required} = true ]]; then
+        _mm_debug "copying ${1} to ${2}..."
+        if ! cp -f "${1}" "${2}" >/dev/null 2>&1; then
+            _mm_error "failed to copy ${1} to ${2}!"
+            false; return
+        fi
+    fi
+
+    stat -L -A cur_mode +mode "${2}"
+    local octal_mode=$(( [#8] $cur_mode ))
+    octal_mode="${octal_mode[${#octal_mode}-2,-1]}"
+    if [[ "${octal_mode}" != "${3}" ]]; then
+        _mm_debug "setting permissions on ${2} (${octal_mode} -> ${3})..."
+        if ! chmod "${3}" "${2}" >/dev/null 2>&1; then
+            _mm_error "failed to set permissions on ${2}!"
+            false; return
+        fi
+    else
+        _mm_debug "permissions on ${2} are already ${3}."
+    fi
+
+    if [[ ${copy_required} = true ]]; then
+        _mm_info "successfully copied ${1} to $(dirname ${2})."
+    else
+        _mm_info "${2} is already up-to-date."
+    fi
+}
+
+# Copies all .zsh files from one directory to another, and sets permissions on
+# the target files. If a target file already exists, and is not identical to the
+# source file, it is backed up in its current directory before the copy operation.
+#
 # $1: The source directory.
 # $2: The destination directory.
 _mm_deploy_scripts() {
@@ -138,26 +204,25 @@ _mm_deploy_scripts() {
         false; return
     fi
 
-    _mm_debug "making scripts in ${1} executable..."
-    if ! chmod 744 "${1}/"*.zsh >/dev/null 2>&1; then
-        _mm_error "failed to set permissions on one or more scripts in ${1}!"
-        false; return
-    fi
-
     local scripts_copied=0
+    local scripts_skipped=0
     _mm_debug "copying scripts from ${1} to ${2}..."
     for f in ${1}/*.zsh(*); do
-        _mm_debug "copying ${f} to ${2}..."
-        if ! cp -f "${f}" "${2}" >/dev/null 2>&1; then
-            _mm_error "failed to copy ${f} to ${2}!"
-            false; return
+        local src_file=$(basename "${f}")
+        local dst_file="${2}/${src_file}"
+        was_copied=false
+        if ! _mm_copy_script "${f}" "${dst_file}" "744" "was_copied"; then
+            break
         fi
-        (( scripts_copied++ ))
+
+        if [[ ${was_copied} = true ]]; then
+            (( scripts_copied++ ))
+        else
+            (( scripts_skipped++ ))
+        fi
     done
 
-    if [[ ${scripts_copied} -gt 0 ]]; then
-        _mm_info "successfully copied ${scripts_copied} scripts to ${2}."
-    else
+    if [[ $(( $scripts_copied + $scripts_skipped )) -eq 0 ]]; then
         _mm_error "no viable scripts (executable with .zsh extension) located in ${1}!"
         false; return
     fi
@@ -210,23 +275,19 @@ _mm_update_motd() {
     fi
 
     if [[ ${1} = true ]]; then
-        _mm_debug "copying scripts from ${UPDATE_MOTD_D} to ${UPDATE_MOTD_D_DEST}..."
         if ! _mm_deploy_scripts "${UPDATE_MOTD_D}" "${UPDATE_MOTD_D_DEST}"; then
             false; return
         fi
 
-        _mm_debug "copying scripts from ${MOTD_HELPERS} to ${MOTD_HELPERS_DEST}..."
         if ! _mm_deploy_scripts "${MOTD_HELPERS}" "${MOTD_HELPERS_DEST}"; then
             false; return
         fi
 
-        _mm_debug "copying ${SCRIPT_NAME} to ${SYSTEM_BIN_DIR}..."
-        if ! cp -f "${SCRIPT_NAME}" "${SYSTEM_BIN_DIR}" >/dev/null 2>&1; then
-            _mm_error "failed to copy ${SCRIPT_NAME} to ${SYSTEM_BIN_DIR}!"
+        was_copied=false
+        if ! _mm_copy_script "${SCRIPT_NAME}" "${SYSTEM_BIN_DIR}/${SCRIPT_NAME}" \
+                "744" "was_copied"; then
             false; return
         fi
-
-        _mm_info "successfully copied ${SCRIPT_NAME} to ${SYSTEM_BIN_DIR}."
 
 read -r -d '' _ld_file_contents <<-EOF
 <?xml version="1.0" encoding="UTF-8"?>
@@ -264,10 +325,10 @@ read -r -d '' _ld_file_contents <<-EOF
 EOF
 
         if [[ -f "${LAUNCH_DAEMON_PATH}" ]]; then
-            _mm_debug "launch daemon file is present on the filesystem; running" \
-                      "an uninstall command in case it is actively running..."
+            _mm_debug "launch daemon file is already present; executing uninstall" \
+                      "command in case it's actively running..."
             if ! _mm_uninstall_launch_daemon; then
-                _mm_warn "unable to uninstall launch daemon; must not be installed."
+                _mm_warn "unable to uninstall launch daemon!"
             fi
         fi
 
@@ -292,7 +353,6 @@ EOF
 
     local scripts_total=0
     local scripts_failed=0
-
     for s in ${UPDATE_MOTD_D_DEST}/*.zsh(.); do
         (( scripts_total++ ))
 
@@ -309,7 +369,6 @@ EOF
     done
 
     local scripts_successful=$(( $scripts_total - $scripts_failed ))
-
     if [[ ${scripts_total} -eq 0 ]]; then
         _mm_error "no viable scripts (executable with .zsh extension) located in ${UPDATE_MOTD_D_DEST}!"
     else
@@ -416,10 +475,7 @@ _mm_main() {
 
 _mm_load_dependencies() {
     for dep in "${SCRIPT_DEPS[@]}"; do
-        _mm_debug "loading dependency '${dep}'..."
-        if source "${dep}" 2>/dev/null; then
-            _mm_debug "successfully loaded dependency '${dep}'."
-        else
+        if ! source "${dep}" 2>/dev/null; then
             _mm_error "failed to load dependency '${dep}'!"
             false; return
         fi
