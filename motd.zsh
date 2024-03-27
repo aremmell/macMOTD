@@ -31,6 +31,9 @@
 
 zmodload zsh/stat 2>/dev/null || true
 zmodload zsh/files 2>/dev/null || true
+zmodload zsh/regex 2>/dev/null || true
+
+unsetopt case_match
 
 MOTD_FILE="/etc/motd"
 MOTD_TMP_FILE="/etc/motd.tmp"
@@ -42,7 +45,12 @@ MOTD_HELPERS="motd-helpers"
 UPDATE_MOTD_D_DEST="/etc/${UPDATE_MOTD_D}"
 MOTD_HELPERS_DEST="${UPDATE_MOTD_D_DEST}/${MOTD_HELPERS}"
 LAUNCH_DAEMON_DIR="/Library/LaunchDaemons"
-LAUNCH_DAEMON_NAME="com.github.aremmell.macMOTD.plist"
+LAUNCH_DAEMON_NAME="com.github.aremmell.macMOTD"
+LAUNCH_DAEMON_PATH="${LAUNCH_DAEMON_DIR}/${LAUNCH_DAEMON_NAME}.plist"
+LAUNCH_DAEMON_INSTALL_CMD="bootstrap"
+LAUNCH_DAEMON_UNINSTALL_CMD="bootout"
+LAUNCH_DAEMON_ENABLE_CMD="enable"
+LAUNCH_DAEMON_DISABLE_CMD="disable"
 SYSTEM_BIN_DIR="/usr/local/bin"
 SCRIPT_NAME="$(basename ${0})"
 SCRIPT_PATH="$(realpath $(dirname ${0}))"
@@ -63,7 +71,9 @@ _mm_echo() {
 }
 
 _mm_debug() {
-    [[ ${_debug} = true ]] && _mm_echo "debug" "90" "$*"
+    if [[ ${_debug} = true ]]; then
+        _mm_echo "debug" "90" "$*"
+    fi
 }
 
 _mm_info() {
@@ -89,7 +99,7 @@ _mm_prepare_temp_motd() {
         _mm_debug "${MOTD_TMP_FILE} does not exist; creating..."
     fi
 
-    if touch "${MOTD_TMP_FILE}"; then
+    if touch "${MOTD_TMP_FILE}" 2>/dev/null; then
         _mm_debug "successfully created ${MOTD_TMP_FILE}."
     else
         _mm_error "failed to create ${MOTD_TMP_FILE}!"
@@ -153,6 +163,41 @@ _mm_deploy_scripts() {
     fi
 }
 
+# $1: The verb to use in log messages (e.g. 'install').
+# $2" The past tense form of $1 (e.g. 'installed').
+# $2: The launchctl subcommand.
+# $3: The remaining arguments to the subcommand.
+_mm_launch_daemon_operation() {
+    _mm_debug "${1}ing launch daemon; 'launchctl ${3} ${4}'..."
+
+    if ! launchctl ${=3} ${=4}; then
+        _mm_error "failed to ${1} launch daemon (${LAUNCH_DAEMON_PATH})!"
+        false; return
+    fi
+
+    _mm_info "successfully ${2} launch daemon (${LAUNCH_DAEMON_PATH})."
+}
+
+_mm_install_launch_daemon() {
+    _mm_launch_daemon_operation "install" "installed" \
+        "${LAUNCH_DAEMON_INSTALL_CMD}" "system ${LAUNCH_DAEMON_PATH}"
+}
+
+_mm_uninstall_launch_daemon() {
+    _mm_launch_daemon_operation "uninstall" "uninstalled" \
+        "${LAUNCH_DAEMON_UNINSTALL_CMD}" "system ${LAUNCH_DAEMON_PATH}"
+}
+
+_mm_enable_launch_daemon() {
+    _mm_launch_daemon_operation "enable" "enabled" \
+        "${LAUNCH_DAEMON_ENABLE_CMD}" "system/${LAUNCH_DAEMON_NAME}"
+}
+
+_mm_disable_launch_daemon() {
+    _mm_launch_daemon_operation "disable" "disabled" \
+        "${LAUNCH_DAEMON_DISABLE_CMD}" "system/${LAUNCH_DAEMON_NAME}"
+}
+
 # Optionally configures the MOTD system for use: installs sample scripts, copies
 # this script to a system bin directory, and installs/starts the launch daemon.
 # Otherwise, updates the MOTD by iterating over the relevant scripts and copying
@@ -185,25 +230,31 @@ _mm_update_motd() {
 
 read -r -d '' _ld_file_contents <<-EOF
 <?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple Computer//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
     <dict>
         <key>KeepAlive</key>
-        <false />
+        <false/>
         <key>Label</key>
         <string>com.github.aremmell.macMOTD</string>
         <key>UserName</key>
+        <string>root</string>
+        <key>GroupName</key>
         <string>root</string>
         <key>ProgramArguments</key>
         <array>
             <string>zsh</string>
             <string>${SYSTEM_BIN_DIR}/motd.zsh</string>
-            <string>--generate</string>
+            <string>${MM_GENERATE_LF}</string>
         </array>
         <key>StartInterval</key>
         <integer>${MOTD_REGEN_FREQUENCY}</integer>
         <key>RunAtLoad</key>
-        <true />
+        <true/>
+        <key>ProcessType</key>
+        <string>Background</string>
+        <key>LowPriorityIO</key>
+        <true/>
         <key>StandardErrorPath</key>
         <string>${MOTD_LOG_FILE}</string>
         <key>StandardOutPath</key>
@@ -211,32 +262,32 @@ read -r -d '' _ld_file_contents <<-EOF
     </dict>
 </plist>
 EOF
-        local ld_filename="${LAUNCH_DAEMON_DIR}/${LAUNCH_DAEMON_NAME}"
-        if [[ -f "${ld_filename}" ]]; then
-            _mm_debug "launch daemon file is already present;" \
-                      "running 'launchctl unload'..."
-            if launchctl unload "${ld_filename}"; then
-                _mm_debug "successfully unloaded launch daemon."
-            else
-                _mm_warn "unable to unload launch daemon; not loaded to begin with?"
+
+        if [[ -f "${LAUNCH_DAEMON_PATH}" ]]; then
+            _mm_debug "launch daemon file is present on the filesystem; running" \
+                      "an uninstall command in case it is actively running..."
+            if ! _mm_uninstall_launch_daemon; then
+                _mm_warn "unable to uninstall launch daemon; must not be installed."
             fi
         fi
 
         _mm_debug "writing launch daemon file (log: '${MOTD_LOG_FILE}', frequency:" \
                   "${MOTD_REGEN_FREQUENCY}sec)..."
-        if ! echo "${_ld_file_contents}" >! "${ld_filename}"; then
-            _mm_error "failed to write launch daemon file (${ld_filename})!"
+        if ! echo "${_ld_file_contents}" >! "${LAUNCH_DAEMON_PATH}"; then
+            _mm_error "failed to write launch daemon file (${LAUNCH_DAEMON_PATH})!"
             false; return
         fi
 
-        _mm_debug "successfully wrote launch daemon file (${ld_filename})."
-
-        if ! launchctl load "${ld_filename}"; then
-            _mm_error "failed to load launch daemon (${ld_filename})!"
+        _mm_debug "successfully wrote launch daemon file (${LAUNCH_DAEMON_PATH});" \
+                  "setting permissions..."
+        if ! chmod 644 "${LAUNCH_DAEMON_PATH}" >/dev/null 2>&1; then
+            _mm_error "failed to set permissions on ${LAUNCH_DAEMON_PATH}!"
             false; return
         fi
 
-        _mm_info "successfully loaded launch daemon; run 'TODO'."
+        if ! _mm_install_launch_daemon; then
+            false; return
+        fi
     fi
 
     local scripts_total=0
@@ -278,46 +329,97 @@ EOF
     fi
 }
 
+_mm_uninstall() {
+    # 1. disable and bootout the launch daemon
+    # 2. delete:
+    #   - /etc/motd
+    #   - /etc/motd.tmp
+    #   - depending on the value of _uninstall_mode:
+    #     - leave /etc/update-motd.d/*.zsh alone;
+    #     - rename
+    #     - nuke
+    #   - launch daemon plist
+    #   - ourself?
+}
+
+# $1: The curent option/argument index.
+# $2: The expected argument.
+# $3: The total count of CLI arguments.
+_mm_have_more_cli_args() {
+    [[ ${1} -le ${3} ]] && [[ -n "${2}" ]] && [[ "${2[1,1]}" != "-" ]]
+}
+
 # $1: The CLI option that requires an argument.
 # $2: The expected argument.
 # $3: The current option/argument index.
 # $4: The total count of CLI arguments.
 _mm_validate_cli_arg() {
-    if [[ ${3} -gt ${4} ]] || [[ -z "${2}" ]]; then
+    if ! _mm_have_more_cli_args "${3}" "${2}" "${4}"; then
         _mm_error "required argument for '${1}' not found."
-        _print_usage=true
-        false; return
+        _mm_print_usage
     fi
 }
 
 _mm_print_usage() {
     read -r -d '' usage_message <<-EOF
 Usage:
-    -i, --install          Installs and enables macMOTD on this machine, then generates the MOTD (implies -g/--generate)
-    -g, --generate         Generates the MOTD file by executing the scripts in ${UPDATE_MOTD_D_DEST}.
-    -l, --log       <path> Overrides the default log file path (${MOTD_LOG_FILE}).
-    -f, --frequency <secs> Overrides the default MOTD regeneration frequency (${MOTD_REGEN_FREQUENCY}sec).
-    -d, --debug            Enables debug mode, which produces more detailed output.
-    -h, --help             Prints this help message.
+    ${MM_INSTALL_SF}, ${MM_INSTALL_LF}          Installs and enables macMOTD, then generates the MOTD file (implies ${MM_GENERATE_SF}/${MM_GENERATE_LF}).
+    ${MM_GENERATE_SF}, ${MM_GENERATE_LF}         Generates the MOTD file by executing the scripts in ${UPDATE_MOTD_D_DEST}.
+    ${MM_UNINSTALL_SF}, ${MM_UNINSTALL_LF} [lrn]  Uninstalls macMOTD. Optionally choose how the scripts in ${UPDATE_MOTD_D_DEST} are handled:
+                             ${MM_BULLET_GLYPH} [l]eave as-is (${MM_ESC_EMPH}default${MM_ESC_EMPH_END}).
+                             ${MM_BULLET_GLYPH} [r]ename rather than delete.
+                             ${MM_BULLET_GLYPH} [n]uke everything (${MM_ESC_EMPH}irreverisble!${MM_ESC_EMPH_END}).
+    ${MM_LOG_SF}, ${MM_LOG_F}       <path> Overrides the default log file path (${MOTD_LOG_LFILE}).
+    ${MM_FREQUENCY_SF}, ${MM_FREQUENCY_F} <secs> Overrides the default MOTD regeneration frequency (${MOTD_REGEN_LFREQUENCY}sec).
+    ${MM_DEBUG_SF}, ${MM_DEBUG_LF}            Enables debug mode, which results in more detailed output.
+    ${MM_HELP_SF}, ${MM_HELP_LF}             Prints this help message.
 EOF
     echo "${usage_message}"
     exit 1
 }
 
 _mm_main() {
+    # mutually exclusive: install + uninstall, generate + uninstall
+    if [[ ${_uninstall} = true ]]; then
+        if [[ ${_install} = true ]]; then
+            _mm_error "${MM_INSTALL_SF}/${MM_INSTALL_LF} and" \
+                      "${MM_UNINSTALL_SF}/${MM_UNINSTALL_LF} are mutually exclusive!"
+            _mm_print_usage
+        elif [[ ${_generate} = true ]]; then
+            _mm_error "${MM_GENERATE_SF}/${MM_GENERATE_LF} and" \
+                      "${MM_UNINSTALL_SF}/${MM_UNINSTALL_LF} are mutually exclusive!"
+            _mm_print_usage
+        fi
+    fi
+
+    # redundant: install + generate
+    if [[ ${_install} = true ]] && [[ ${_generate} = true ]]; then
+        _mm_error "${MM_INSTALL_SF}/${MM_INSTALL_LF} and" \
+                  "${MM_GENERATE_SF}/${MM_GENERATE_LF} are overlapping; only one" \
+                  "may be specified at a time."
+        _mm_print_usage
+    fi
+
     if [[ ${_install} = true ]]; then
         _mm_update_motd true
     elif [[ ${_generate} = true ]]; then
         _mm_update_motd false
+    elif [[ ${_uninstall} = true ]]; then
+        _mm_warn "would be doing uninstall."
     else
-        _mm_error "no command to execute (-i/--install or -g/--generate required)!"
+        _mm_error "no task to execute (${MM_INSTALL_SF}/${MM_INSTALL_LF}," \
+                  "${MM_GENERATE_SF}/${MM_GENERATE_LF}, or" \
+                  "${MM_UNINSTALL_SF}/${MM_UNINSTALL_LF} required)!"
         _mm_print_usage
     fi
 }
 
 _mm_load_dependencies() {
     for dep in "${SCRIPT_DEPS[@]}"; do
-        if ! source "${dep}" 2>/dev/null; then
+        _mm_debug "loading dependency '${dep}'..."
+        if source "${dep}" 2>/dev/null; then
+            _mm_debug "successfully loaded dependency '${dep}'."
+        else
             _mm_error "failed to load dependency '${dep}'!"
             false; return
         fi
@@ -334,29 +436,55 @@ fi
 
 _mm_load_dependencies || exit 1
 
+[[ ${#@} -gt 0 ]] || _mm_print_usage
+
 _argv=("$@")
+_argc="${#_argv[@]}"
 _generate=false
 _install=false
+_uninstall=false
+_uninstall_mode=MM_UNINSTALL_LEAVE
 _debug=false
-
-_argc="${#_argv[@]}"
-[[ ${_argc} -gt 0 ]] || _mm_print_usage
 
 for (( i=0;i<=${_argc};i++ )); do
     [[ -z "${_argv[i]}" ]] && continue
     _mm_debug "evaluating option: '${_argv[i]}'..."
     case ${_argv[i]} in
-        -i|--install)
+        ${MM_INSTALL_SF}|${MM_INSTALL_LF})
             _install=true
         ;;
-        -g|--generate)
+        ${MM_UNINSTALL_SF}|${MM_UNINSTALL_LF})
+            _uninstall=true
+            if _mm_have_more_cli_args "${i}" "${_argv[i+1]}" "${_argc}"; then
+                if [[ ${_argv[i+1]} =~ ^[lrn]{1}$ ]]; then
+                    case ${_argv[i+1]} in
+                        l|L)
+                            _uninstall_mode=MM_UNINSTALL_LEAVE
+                        ;;
+                        r|R)
+                            _uninstall_mode=MM_UNINSTALL_RENAME
+                        ;;
+                        n|N)
+                            _uninstall_mode=MM_UNINSTALL_NUKE
+                        ;;
+                    esac
+                    _mm_debug "uninstall mode: ${_uninstall_mode}."
+                else
+                    _mm_error "invalid argument for '${_argv[i]}'; must be one of 'lrn'!"
+                    _mm_print_usage
+                fi
+                (( i++ ))
+                continue
+            fi
+        ;;
+        ${MM_GENERATE_SF}|${MM_GENERATE_LF})
             _generate=true
         ;;
-        -d|--debug)
+        ${MM_DEBUG_SF}|${MM_DEBUG_LF})
             _debug=true
             _mm_debug "debug mode enabled."
         ;;
-        -l|--log)
+        ${MM_LOG_SF}|${MM_LOG_LF})
             if _mm_validate_cli_arg "${_argv[i]}" "${_argv[i+1]}" "${i}" "${_argc}"; then
                 if touch "${_argv[i+1]}" 2>/dev/null; then
                     _mm_info "using log file '${_argv[i+1]}'."
@@ -369,7 +497,7 @@ for (( i=0;i<=${_argc};i++ )); do
                 continue
             fi
         ;;
-        -f|--frequency)
+        ${MM_FREQUENCY_SF}|${MM_FREQUENCY_LF})
             if _mm_validate_cli_arg "${_argv[i]}" "${_argv[i+1]}" "${i}" "${_argc}"; then
                 if mm_is_number "${_argv[i+1]}"; then
                     if [[ ${_argv[i+1]} -ge ${MOTD_MIN_FREQUENCY} ]]; then
@@ -387,11 +515,11 @@ for (( i=0;i<=${_argc};i++ )); do
                 continue
             fi
         ;;
-        -h|--help)
+        ${MM_HELP_SF}|${MM_HELP_LF})
             _mm_print_usage
         ;;
         *)
-            _mm_error "unknown option: ${arg}"
+            _mm_error "unknown option: ${_argv[i]}"
             _mm_print_usage
         ;;
     esac

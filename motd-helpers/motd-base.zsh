@@ -32,7 +32,36 @@
 ##############################################################################
 # Global variables
 
-readonly MM_DEFAULT_MIN_COLS="90"
+typeset -rx MM_DEFAULT_MIN_COLS="90"
+typeset -rx MM_BULLET_GLYPH="\xe2\x80\xa2"
+
+typeset -rx MM_ESC_EMPH="\x1b[3m"
+typeset -rx MM_ESC_EMPH_END="\x1b[23m"
+
+typeset -rxi \
+    MM_UNINSTALL_LEAVE=1 \
+    MM_UNINSTALL_RENAME=2 \
+    MM_UNINSTALL_NUKE=3
+
+typeset -rx \
+    MM_INSTALL_SF="-i" \
+    MM_INSTALL_LF="--install" \
+    MM_GENERATE_SF="-g" \
+    MM_GENERATE_LF="--generate" \
+    MM_UNINSTALL_SF="-u" \
+    MM_UNINSTALL_LF="--uninstall" \
+    MM_DISABLE_SF="-D" \
+    MM_DISABLE_LF="--disable" \
+    MM_ENABLE_SF="-e" \
+    MM_ENABLE_LF="--enable" \
+    MM_LOG_SF="-l" \
+    MM_LOG_LF="--log" \
+    MM_FREQUENCY_SF="-f" \
+    MM_FREQUENCY_LF="--frequency" \
+    MM_DEBUG_SF="-d" \
+    MM_DEBUG_LF="--debug" \
+    MM_HELP_SF="-h" \
+    MM_HELP_LF="--help"
 
 ##############################################################################
 # Helper functions
