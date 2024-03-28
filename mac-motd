@@ -510,9 +510,9 @@ Usage:
     ${MM_INSTALL_SF}, ${MM_INSTALL_LF}          Installs and enables macMOTD, then generates the MOTD file (implies ${MM_GENERATE_SF}/${MM_GENERATE_LF}).
     ${MM_GENERATE_SF}, ${MM_GENERATE_LF}         Generates the MOTD file by executing the scripts in ${UPDATE_MOTD_D_DEST}.
     ${MM_UNINSTALL_SF}, ${MM_UNINSTALL_LF} [lrn]  Uninstalls macMOTD. Optionally choose how the scripts in ${UPDATE_MOTD_D_DEST} are handled:
-                             ${MM_BULLET_GLYPH} [l]eave as-is (${MM_ESC_EMPH}default${MM_ESC_EMPH_END}).
-                             ${MM_BULLET_GLYPH} [r]ename rather than delete.
-                             ${MM_BULLET_GLYPH} [n]uke everything (${MM_ESC_EMPH}irreverisble!${MM_ESC_EMPH_END}).
+                             ${MM_GLYPH_BULLET} [l]eave as-is (${MM_ESC_EMPH}default${MM_ESC_EMPH_END}).
+                             ${MM_GLYPH_BULLET} [r]ename rather than delete.
+                             ${MM_GLYPH_BULLET} [n]uke everything (${MM_ESC_EMPH}irreverisble!${MM_ESC_EMPH_END}).
     ${MM_LOG_SF}, ${MM_LOG_F}       <path> Overrides the default log file path (${MOTD_LOG_LFILE}).
     ${MM_FREQUENCY_SF}, ${MM_FREQUENCY_F} <secs> Overrides the default MOTD regeneration frequency (${MOTD_REGEN_LFREQUENCY}sec).
     ${MM_DEBUG_SF}, ${MM_DEBUG_LF}            Enables debug mode, which results in more detailed output.
