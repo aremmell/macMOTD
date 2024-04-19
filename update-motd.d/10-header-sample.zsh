@@ -76,3 +76,58 @@ declare -a test_lines=(
 
 mm_print_hcenter "test_lines"
 
+echo "\n==== begin ANSI escape code test ===="
+echo "---- COLORS ----\n"
+
+declare -A fg_color_map=(
+ [black]="${MM_ANSI_FG_BLACK}"
+ [red]="${MM_ANSI_FG_RED}"
+ [green]="${MM_ANSI_FG_GREEN}"
+ [yellow]="${MM_ANSI_FG_YELLOW}"
+ [blue]="${MM_ANSI_FG_BLUE}"
+ [magenta]="${MM_ANSI_FG_MAGENTA}"
+ [cyan]="${MM_ANSI_FG_CYAN}"
+ [white]="${MM_ANSI_FG_WHITE}"
+)
+
+declare -A bg_color_map=(
+ [black]="${MM_ANSI_BG_BLACK}"
+ [red]="${MM_ANSI_BG_RED}"
+ [green]="${MM_ANSI_BG_GREEN}"
+ [yellow]="${MM_ANSI_BG_YELLOW}"
+ [blue]="${MM_ANSI_BG_BLUE}"
+ [magenta]="${MM_ANSI_BG_MAGENTA}"
+ [cyan]="${MM_ANSI_BG_CYAN}"
+ [white]="${MM_ANSI_BG_WHITE}"
+)
+
+for key value in ${(kv)fg_color_map}; do
+    mm_ansi_color "This is normal ${key} text." "" "${value}"
+done
+
+for key value in ${(kv)fg_color_map}; do
+    mm_ansi_color "This is bold ${key} text." "${MM_ANSI_ATTR_BOLD}" "${value}"
+done
+
+for key value in ${(kv)fg_color_map}; do
+    mm_ansi_color "This is dim ${key} text." "${MM_ANSI_ATTR_DIM}" "${value}"
+done
+
+for key value in ${(kv)fg_color_map}; do
+    local rnd=$(( $RANDOM % ${#bg_color_map} - 1 ))
+    local idx=0
+    for bgkey bgvalue in ${(kv)bg_color_map}; do
+        if [[ ${idx} -eq ${rnd} ]]; then
+            mm_ansi_color "This is black text with ${bgkey} background." "" "${MM_ANSI_FG_BLACK}" "${bgvalue}"
+            break
+        fi
+        (( idx++ ))
+    done
+done
+
+echo "\n---- ATTRS ----\n"
+
+mm_ansi_invert "This is inverted text."
+mm_ansi_uline "This is underlined text."
+mm_ansi_emph "This is emphasized text."
+mm_ansi_bold "This is bold text."
