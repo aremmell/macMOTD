@@ -70,20 +70,20 @@ _mm_echo() {
 
 _mm_debug() {
     if [[ ${_debug} = true ]]; then
-        _mm_echo "debug" "90" "$*"
+        _mm_echo "debug" "${MM_ANSI_FG_BBLACK}" "$*"
     fi
 }
 
 _mm_info() {
-    _mm_echo "info" "37" "$*"
+    _mm_echo "info" "${MM_ANSI_FG_WHITE}" "$*"
 }
 
 _mm_warn() {
-    _mm_echo "warn" "33" "$*"
+    _mm_echo "warn" "${MM_ANSI_FG_YELLOW}" "$*"
 }
 
 _mm_error() {
-    _mm_echo "error" "31" "$*"
+    _mm_echo "error" "${MM_ANSI_FG_RED}" "$*"
 }
 
 _mm_prepare_temp_motd() {
