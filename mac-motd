@@ -486,6 +486,10 @@ _mm_uninstall() {
     _mm_info "successfully uninstalled macMOTD."
 }
 
+_mm_print_version() {
+    _mm_info "macMOTD version ${MM_CUR_VERSION}"
+}
+
 # $1: The curent option/argument index.
 # $2: The expected argument.
 # $3: The total count of CLI arguments.
@@ -516,6 +520,7 @@ Usage:
     ${MM_LOG_SF}, ${MM_LOG_F}       <path> Overrides the default log file path (${MOTD_LOG_LFILE}).
     ${MM_FREQUENCY_SF}, ${MM_FREQUENCY_F} <secs> Overrides the default MOTD regeneration frequency (${MOTD_REGEN_LFREQUENCY}sec).
     ${MM_DEBUG_SF}, ${MM_DEBUG_LF}            Enables debug mode, which results in more detailed output.
+    ${MM_VERSION_SF}, ${MM_VERSION_LF}          Prints version information.
     ${MM_HELP_SF}, ${MM_HELP_LF}             Prints this help message.
 EOF
     echo "${usage_message}"
@@ -544,7 +549,9 @@ _mm_main() {
         _mm_print_usage
     fi
 
-    if [[ ${_install} = true ]]; then
+    if [[ ${_print_version} = true ]]; then
+        _mm_print_version
+    elif if [[ ${_install} = true ]]; then
         _mm_update_motd true
     elif [[ ${_generate} = true ]]; then
         _mm_update_motd false
@@ -552,8 +559,9 @@ _mm_main() {
         _mm_uninstall
     else
         _mm_error "no task to execute (${MM_INSTALL_SF}/${MM_INSTALL_LF}," \
-                  "${MM_GENERATE_SF}/${MM_GENERATE_LF}, or" \
-                  "${MM_UNINSTALL_SF}/${MM_UNINSTALL_LF} required)!"
+                  "${MM_GENERATE_SF}/${MM_GENERATE_LF}," \
+                  "${MM_UNINSTALL_SF}/${MM_UNINSTALL_LF}, or" \
+                  "${MM_VERSION_SF}/${MM_VERSION_LF} required)!"
         _mm_print_usage
     fi
 }
@@ -592,6 +600,7 @@ _install=false
 _uninstall=false
 _uninstall_mode=MM_UNINSTALL_LEAVE
 _debug=false
+_print_version=false
 
 for (( i=0;i<=${_argc};i++ )); do
     [[ -z "${_argv[i]}" ]] && continue
@@ -630,6 +639,9 @@ for (( i=0;i<=${_argc};i++ )); do
         ${MM_DEBUG_SF}|${MM_DEBUG_LF})
             _debug=true
             _mm_debug "debug mode enabled."
+        ;;
+        ${MM_VERSION_SF}|${MM_VERSION_LF})
+            _print_version=true
         ;;
         ${MM_LOG_SF}|${MM_LOG_LF})
             if _mm_validate_cli_arg "${_argv[i]}" "${_argv[i+1]}" "${i}" "${_argc}"; then

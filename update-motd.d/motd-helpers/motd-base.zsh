@@ -32,6 +32,8 @@
 ################################################################################
 # Global variables
 
+declare -rx MM_CUR_VERSION="1.0.1"
+
 declare -rx MM_DEFAULT_MIN_COLS="90"
 declare -rx \
     MM_GLYPH_BULLET="\xe2\x80\xa2" \
@@ -112,6 +114,8 @@ declare -rx \
     MM_FREQUENCY_LF="--frequency" \
     MM_DEBUG_SF="-d" \
     MM_DEBUG_LF="--debug" \
+    MM_VERSION_SF="-v" \
+    MM_VERSION_LF="--version" \
     MM_HELP_SF="-h" \
     MM_HELP_LF="--help"
 
