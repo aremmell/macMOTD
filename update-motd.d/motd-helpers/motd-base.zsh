@@ -4,9 +4,9 @@
 #
 # This file is part of macMOTD (https://github.com/aremmell/macMOTD/)
 #
-# Version:   1.0.0
+# Version:   1.0.1
 # License:   MIT
-# Copyright: (c) 2024 Ryan M. Lederman <lederman@gmail.com>
+# Copyright: (c) 2025 Ryan M. Lederman <lederman@gmail.com>
 #
 ################################################################################
 #
