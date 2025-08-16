@@ -1,5 +1,38 @@
 #!/usr/bin/env zsh
 
+################################################################################
+#
+# This file is part of macMOTD (https://github.com/aremmell/macMOTD/)
+#
+# Version:   1.0.1
+# License:   MIT
+# Copyright: (c) 2025 Ryan M. Lederman <lederman@gmail.com>
+#
+################################################################################
+#
+# Permission is hereby granted, free of charge, to any person obtaining a copy of
+# this software and associated documentation files (the "Software"), to deal in
+# the Software without restriction, including without limitation the rights to
+# use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of
+# the Software, and to permit persons to whom the Software is furnished to do so,
+# subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in all
+# copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
+# FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
+# COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
+# IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
+# CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+#
+################################################################################
+
+###############
+# WIP scratchpad for utility functions to ship as part of macMOTD
+###############
+
 # sample code from 10-header-sample.zsh
 # =====================================
 #
@@ -188,14 +221,17 @@ print_memory_info() {
     local compressed="$(( ${vms[17]} * ${page_size} ))"
     local used="$(( ${app} + ${wired} + ${compressed} ))"
 
-#    printf "total: %s\npage size: %s\npageable: %s\npurgeable: %s\napp: %s\nwired: %s\ncompressed: %s\nused: %s\n" \
-#        "${total}" "${page_size}" "${pageable}" "${purgeable}" "${app}" "${wired}" \
-#        "${compressed}" "${used}"
+    printf "total: %s\npage size: %s\npageable: %s\npurgeable: %s\napp: %s\nwired: %s\ncompressed: %s\nused: %s\n" \
+        "${total}" "${page_size}" "${pageable}" "${purgeable}" "${app}" "${wired}" \
+        "${compressed}" "${used}"
 }
-
-# uname -n = kenny
-# uname -m = arm64
 
 print_cpu_info
 print_os_info
 print_memory_info
+
+# print_storage_stats
+# busted on:
+# Darwin kenny 24.6.0 Darwin Kernel Version 24.6.0
+# Mon Jul 14 11:30:55 PDT 2025; root:xnu-11417.140.69~1/RELEASE_ARM64_T6031 arm64
+
