@@ -51,7 +51,7 @@ declare -r LAUNCH_DAEMON_FILE="${LAUNCH_DAEMON_DIR}/${LAUNCH_DAEMON_NAME}.plist"
 declare -r LAUNCH_DAEMON_INSTALL_CMD="bootstrap"
 declare -r LAUNCH_DAEMON_UNINSTALL_CMD="bootout"
 declare -r SYSTEM_BIN_DIR="/usr/local/bin"
-declare -r SCRIPT_PERMS="744"
+declare -r SCRIPT_PERMS="755"
 declare -r SCRIPT_NAME="$(basename ${0})"
 declare -r SCRIPT_PATH="$(realpath $(dirname ${0}))"
 declare -a SCRIPT_DEPS=()
@@ -320,7 +320,7 @@ read -r -d '' _ld_file_contents <<-EOF
         <key>ProgramArguments</key>
         <array>
             <string>zsh</string>
-            <string>${SYSTEM_BIN_DIR}/motd.zsh</string>
+            <string>${SYSTEM_BIN_DIR}/${SCRIPT_NAME}</string>
             <string>${MM_GENERATE_LF}</string>
         </array>
         <key>StartInterval</key>
@@ -517,8 +517,8 @@ Usage:
                              ${MM_GLYPH_BULLET} [l]eave as-is (${MM_ESC_EMPH}default${MM_ESC_EMPH_END}).
                              ${MM_GLYPH_BULLET} [r]ename rather than delete.
                              ${MM_GLYPH_BULLET} [n]uke everything (${MM_ESC_EMPH}irreverisble!${MM_ESC_EMPH_END}).
-    ${MM_LOG_SF}, ${MM_LOG_F}       <path> Overrides the default log file path (${MOTD_LOG_LFILE}).
-    ${MM_FREQUENCY_SF}, ${MM_FREQUENCY_F} <secs> Overrides the default MOTD regeneration frequency (${MOTD_REGEN_LFREQUENCY}sec).
+    ${MM_LOG_SF}, ${MM_LOG_LF}       <path> Overrides the default log file path (${MOTD_LOG_FILE}).
+    ${MM_FREQUENCY_SF}, ${MM_FREQUENCY_LF} <secs> Overrides the default MOTD regeneration frequency (${MOTD_REGEN_FREQUENCY}sec).
     ${MM_DEBUG_SF}, ${MM_DEBUG_LF}            Enables debug mode, which results in more detailed output.
     ${MM_VERSION_SF}, ${MM_VERSION_LF}          Prints version information.
     ${MM_HELP_SF}, ${MM_HELP_LF}             Prints this help message.
