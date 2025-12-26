@@ -178,6 +178,8 @@ print_os_info() {
         ['12']="Monterey"
         ['13']="Ventura"
         ['14']="Sonoma"
+        ['15']="Sequoia"
+        ['26']="Tahoe"
     )
 
     local os_name="Unknown"
