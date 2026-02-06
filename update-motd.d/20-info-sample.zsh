@@ -30,10 +30,7 @@
 ################################################################################
 
 #
-# This is a sample script for use with the dynamic MOTD (Message of the Day)
-# feature provided by this library.
-#
-# See the comment in '10-header-sample.zsh' for more information.
+# This is a sample script. See README.md for more information.
 #
 
 source "$(realpath $(dirname ${0}))/motd-helpers/motd-base.zsh" || exit 1
