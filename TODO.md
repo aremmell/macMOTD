@@ -1,2 +1,0 @@
-# macMOTD TODO
-
