@@ -4,7 +4,7 @@
 #
 # This file is part of macMOTD (https://github.com/aremmell/macMOTD/)
 #
-# Version:   1.0.1
+# Version:   1.1.0
 # License:   MIT
 # Copyright: (c) 2025 Ryan M. Lederman <lederman@gmail.com>
 #
@@ -44,14 +44,18 @@ declare -r UPDATE_MOTD_D="update-motd.d"
 declare -r MOTD_HELPERS="motd-helpers"
 declare -r UPDATE_MOTD_D_DEST="/etc/${UPDATE_MOTD_D}"
 declare -r MOTD_HELPERS_DEST="${UPDATE_MOTD_D_DEST}/${MOTD_HELPERS}"
+declare -r PACKAGE_NAMESPACE="com.aremmell"
 declare -r LAUNCH_DAEMON_PERMS="644"
 declare -r LAUNCH_DAEMON_DIR="/Library/LaunchDaemons"
-declare -r LAUNCH_DAEMON_NAME="com.github.aremmell.macMOTD"
+declare -r LAUNCH_DAEMON_NAME="${PACKAGE_NAMESPACE}.macMOTD"
 declare -r LAUNCH_DAEMON_FILE="${LAUNCH_DAEMON_DIR}/${LAUNCH_DAEMON_NAME}.plist"
 declare -r LAUNCH_DAEMON_INSTALL_CMD="bootstrap"
 declare -r LAUNCH_DAEMON_UNINSTALL_CMD="bootout"
+declare -r LAUNCH_DAEMON_DOMAIN="system"
+declare -r LAUNCH_DAEMON_USER="root"
+declare -r LAUNCH_DAEMON_GROUP="wheel"
 declare -r SYSTEM_BIN_DIR="/usr/local/bin"
-declare -r SCRIPT_PERMS="755"
+declare -r SCRIPT_PERMS="754"
 declare -r SCRIPT_NAME="$(basename ${0})"
 declare -r SCRIPT_PATH="$(realpath $(dirname ${0}))"
 declare -a SCRIPT_DEPS=()
@@ -258,14 +262,15 @@ _mm_deploy_scripts() {
 # $2: The launchctl subcommand.
 # $3: The remaining arguments to the subcommand.
 _mm_launch_daemon_operation() {
-    _mm_info "${1}ing launch daemon; 'launchctl ${2} ${3}'..."
+    _mm_info "${1}ing launch daemon..."
+    _mm_debug "running 'launchctl ${2} ${3}'..."
 
-    if ! launchctl ${=2} ${=3}; then
-        _mm_error "failed to ${1} launch daemon (${LAUNCH_DAEMON_FILE})!"
+    if ! launchctl ${=2} ${=3} > /dev/null 2>&1; then
+        _mm_error "failed to ${1} launch daemon; error: $?!"
         false; return
     fi
 
-    _mm_info "successfully ${1}ed launch daemon (${LAUNCH_DAEMON_FILE})."
+    _mm_info "successfully ${1}ed launch daemon."
 }
 
 _mm_install_launch_daemon() {
@@ -275,7 +280,7 @@ _mm_install_launch_daemon() {
 
 _mm_uninstall_launch_daemon() {
     _mm_launch_daemon_operation "uninstall" "${LAUNCH_DAEMON_UNINSTALL_CMD}" \
-        "system ${LAUNCH_DAEMON_FILE}"
+        "system/${LAUNCH_DAEMON_NAME}"
 }
 
 # Optionally configures the MOTD system for use: installs sample scripts, copies
@@ -309,36 +314,25 @@ read -r -d '' _ld_file_contents <<-EOF
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
     <dict>
-        <key>KeepAlive</key>
-        <false/>
         <key>Label</key>
-        <string>com.github.aremmell.macMOTD</string>
-        <key>UserName</key>
-        <string>root</string>
-        <key>GroupName</key>
-        <string>root</string>
+        <string>${PACKAGE_NAMESPACE}.macMOTD</string>
         <key>ProgramArguments</key>
         <array>
-            <string>zsh</string>
-            <string>${SYSTEM_BIN_DIR}/${SCRIPT_NAME}</string>
-            <string>${MM_GENERATE_LF}</string>
+            <string>/bin/zsh</string>
+            <string>-c</string>
+            <string>/usr/local/bin/mac-motd --generate</string>
         </array>
-        <key>StartInterval</key>
-        <integer>${MOTD_REGEN_FREQUENCY}</integer>
         <key>RunAtLoad</key>
-        <true/>
-        <key>ProcessType</key>
-        <string>Background</string>
-        <key>LowPriorityIO</key>
         <true/>
         <key>StandardErrorPath</key>
         <string>${MOTD_LOG_FILE}</string>
         <key>StandardOutPath</key>
         <string>${MOTD_LOG_FILE}</string>
+        <key>StartInterval</key>
+        <integer>${MOTD_REGEN_FREQUENCY}</integer>
     </dict>
 </plist>
 EOF
-
         if [[ -f "${LAUNCH_DAEMON_FILE}" ]]; then
             _mm_debug "launch daemon file is already present; executing uninstall" \
                       "command in case it's actively running..."
@@ -350,7 +344,7 @@ EOF
         _mm_debug "writing launch daemon file (log: '${MOTD_LOG_FILE}', frequency:" \
                   "${MOTD_REGEN_FREQUENCY}sec)..."
         if ! echo "${_ld_file_contents}" >! "${LAUNCH_DAEMON_FILE}"; then
-            _mm_error "failed to write launch daemon file (${LAUNCH_DAEMON_FILE})!"
+            _mm_error "failed to write launch daemon file (${LAUNCH_DAEMON_FILE}): $?!"
             false; return
         fi
 
@@ -383,6 +377,7 @@ EOF
             _mm_debug "executing ${s}..."
             if ! print -r -- "$(zsh "${s}" 2>&1)" >>! ${MOTD_TMP_FILE}; then
                 (( scripts_failed++ ))
+# TODO: is $? still valid here after the (( ))?
                 _mm_warn "got failure exit code $? from ${s}!"
             fi
         else
