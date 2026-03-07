@@ -210,6 +210,16 @@ mm_is_number() {
     [[ ${1} =~ ^[0-9]+$ ]]
 }
 
+# Determines the width of the terminal in columns.
+#
+# $1: The name of a variable that receives the return value if successful.
+mm_get_term_cols() {
+    if [[ -z "${1}" ]]; then
+        false; return
+    fi
+    print -v ${1} -- "$(tput -Txterm-256color cols)"
+}
+
 # Prints center-justified lines of text, given a number of columns wide the
 # display area is.
 #
@@ -219,11 +229,12 @@ mm_print_hcenter() {
     local min_cols="${MM_DEFAULT_MIN_COLS}"
     mm_is_number "${1}" && min_cols="${1}"
 
-    local tput_cols="$(tput -Txterm-256color cols)"
-    [[ "${tput_cols}" -lt ${min_cols} ]] && tput_cols="${min_cols}"
+    _tput_cols="${min_cols}"
+    mm_get_term_cols "tput_cols"
+    [[ "${_tput_cols}" -lt ${min_cols} ]] && _tput_cols="${min_cols}"
 
     declare -a text=(${(P)1})
     for (( i=0;i<=${#text[@]};i++ )); do
-        printf "%*s\n" $(( (${#text[i]} + tput_cols) / 2)) "${text[i]}"
+        printf "%*s\n" $(( (${#text[i]} + _tput_cols) / 2)) "${text[i]}"
     done
 }
