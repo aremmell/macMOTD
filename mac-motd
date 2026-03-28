@@ -37,8 +37,8 @@ unsetopt case_match
 
 declare -r MOTD_FILE="/etc/motd"
 declare -r MOTD_TMP_FILE="/etc/motd.tmp"
-declare -r MOTD_LOG_FILE="/var/log/macMOTD.log"
-declare -r MOTD_REGEN_FREQUENCY="600"
+declare    MOTD_LOG_FILE="/var/log/macMOTD.log"
+declare    MOTD_REGEN_FREQUENCY="600"
 declare -r MOTD_MIN_FREQUENCY="10"
 declare -r UPDATE_MOTD_D="update-motd.d"
 declare -r MOTD_HELPERS="motd-helpers"
@@ -233,7 +233,7 @@ _mm_deploy_scripts() {
     fi
 
     if [[ ! -d "${1}" ]] || [[ ! -d "${2}" ]]; then
-        _nv_error "either the source or destination directory does not exist (" \
+        _mm_error "either the source or destination directory does not exist (" \
                   "src: '${1}', dst: '${2}')!"
         false; return
     fi
@@ -376,9 +376,9 @@ EOF
         if [[ -x "${s}" ]]; then
             _mm_debug "executing ${s}..."
             if ! print -r -- "$(zsh "${s}" 2>&1)" >>! ${MOTD_TMP_FILE}; then
+                _tmp_err="$?"
                 (( scripts_failed++ ))
-# TODO: is $? still valid here after the (( ))?
-                _mm_warn "got failure exit code $? from ${s}!"
+                _mm_warn "got failure exit code ${_tmp_err} from ${s}!"
             fi
         else
             (( scripts_failed++ ))
@@ -546,7 +546,7 @@ _mm_main() {
 
     if [[ ${_print_version} = true ]]; then
         _mm_print_version
-    elif if [[ ${_install} = true ]]; then
+    elif [[ ${_install} = true ]]; then
         _mm_update_motd true
     elif [[ ${_generate} = true ]]; then
         _mm_update_motd false
