@@ -4,9 +4,9 @@
 #
 # This file is part of macMOTD (https://github.com/aremmell/macMOTD/)
 #
-# Version:   1.1.0
+# Version:   1.1.1
 # License:   MIT
-# Copyright: (c) 2025 Ryan M. Lederman <lederman@gmail.com>
+# Copyright: (c) 2026 Ryan M. Lederman <lederman@gmail.com>
 #
 ################################################################################
 #
@@ -32,7 +32,7 @@
 ################################################################################
 # Global variables
 
-declare -rx MM_CUR_VERSION="1.1.0"
+declare -rx MM_CUR_VERSION="1.1.1"
 
 declare -rx MM_DEFAULT_MIN_COLS="90"
 declare -rx \
