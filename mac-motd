@@ -4,7 +4,7 @@
 #
 # This file is part of macMOTD (https://github.com/aremmell/macMOTD/)
 #
-# Version:   1.1.1
+# Version:   1.1.2
 # License:   MIT
 # Copyright: (c) 2026 Ryan M. Lederman <lederman@gmail.com>
 #
@@ -29,7 +29,7 @@
 #
 ################################################################################
 
-zmodload zsh/stat 2>/dev/null || true
+zmodload zsh/stat  2>/dev/null || true
 zmodload zsh/files 2>/dev/null || true
 zmodload zsh/regex 2>/dev/null || true
 
@@ -37,7 +37,8 @@ unsetopt case_match
 
 declare -r MOTD_FILE="/etc/motd"
 declare -r MOTD_TMP_FILE="/etc/motd.tmp"
-declare    MOTD_LOG_FILE="/var/log/macMOTD.log"
+declare -r MOTD_DEFAULT_LOG_FILE="/var/log/macMOTD.log"
+declare    MOTD_LOG_FILE="${MOTD_DEFAULT_LOG_FILE}"
 declare    MOTD_REGEN_FREQUENCY="600"
 declare -r MOTD_MIN_FREQUENCY="10"
 declare -r UPDATE_MOTD_D="update-motd.d"
@@ -111,8 +112,10 @@ _mm_prepare_temp_motd() {
 
 _mm_update_motd_from_temp() {
     _mm_debug "moving ${MOTD_TMP_FILE} to ${MOTD_FILE}..."
-    if ! mv -f "${MOTD_TMP_FILE}" "${MOTD_FILE}" >/dev/null 2>&1; then
-        _mm_error "failed to move ${MOTD_TMP_FILE} to ${MOTD_FILE}!"
+    mv -f "${MOTD_TMP_FILE}" "${MOTD_FILE}" >/dev/null 2>&1
+    local tmp_err=$?
+    if [[ ${tmp_err} -ne 0 ]] ; then
+        _mm_error "failed to move ${MOTD_TMP_FILE} to ${MOTD_FILE}: ${tmp_err}!"
         false; return
     fi
     sync
@@ -158,7 +161,7 @@ _mm_get_octal_permissions() {
 # $1: File.
 # $2: Name of a variable that receives the backup filename.
 _mm_get_backup_filename() {
-    print -v ${2} -- "${1/.zsh/}-$(date -Iseconds)${MM_BACKUP_EXT}"
+    print -v ${2} -- "${1%.zsh}-$(date -Iseconds)${MM_BACKUP_EXT}"
 }
 
 # Copies a script from one location to another, unless the target file exists
@@ -265,8 +268,10 @@ _mm_launch_daemon_operation() {
     _mm_info "${1}ing launch daemon..."
     _mm_debug "running 'launchctl ${2} ${3}'..."
 
-    if ! launchctl ${=2} ${=3} > /dev/null 2>&1; then
-        _mm_error "failed to ${1} launch daemon; error: $?!"
+    launchctl ${=2} ${=3} > /dev/null 2>&1
+    local launch_err=$?
+    if [[ ${launch_err} -ne 0 ]]; then
+        _mm_error "failed to ${1} launch daemon; error: ${launch_err}!"
         false; return
     fi
 
@@ -343,8 +348,11 @@ EOF
 
         _mm_debug "writing launch daemon file (log: '${MOTD_LOG_FILE}', frequency:" \
                   "${MOTD_REGEN_FREQUENCY}sec)..."
-        if ! echo "${_ld_file_contents}" >! "${LAUNCH_DAEMON_FILE}"; then
-            _mm_error "failed to write launch daemon file (${LAUNCH_DAEMON_FILE}): $?!"
+
+        echo "${_ld_file_contents}" >! "${LAUNCH_DAEMON_FILE}" 2>/dev/null
+        local echo_err=$?
+        if [[ ${echo_err} -ne 0 ]]; then
+            _mm_error "failed to write launch daemon file (${LAUNCH_DAEMON_FILE}): ${echo_err}!"
             false; return
         fi
 
@@ -375,20 +383,24 @@ EOF
 
         if [[ -x "${s}" ]]; then
             _mm_debug "executing ${s}..."
-            if ! print -r -- "$(zsh "${s}" 2>&1)" >>! ${MOTD_TMP_FILE}; then
-                _tmp_err="$?"
+            zsh "${s}" >>! ${MOTD_TMP_FILE}
+            local exec_err=$?
+            if [[ ${exec_err} -ne 0 ]]; then
+                _mm_error "got failure exit code ${exec_err} from ${s}!"
                 (( scripts_failed++ ))
-                _mm_warn "got failure exit code ${_tmp_err} from ${s}!"
+            else
+                _mm_info "successfully executed ${s}."
             fi
         else
             (( scripts_failed++ ))
-            _mm_warn "${s} is not executuable; skipping!"
+            _mm_warn "${s} is not executable; skipping!"
         fi
     done
 
     local scripts_successful=$(( $scripts_total - $scripts_failed ))
     if [[ ${scripts_total} -eq 0 ]]; then
         _mm_error "no viable scripts (executable .zsh) located in ${UPDATE_MOTD_D_DEST}!"
+        false; return;
     else
         if [[ ${scripts_successful} -gt 0 ]]; then
             _mm_info "successfully executed ${scripts_successful}/${scripts_total} scripts."
@@ -511,8 +523,8 @@ Usage:
     ${MM_UNINSTALL_SF}, ${MM_UNINSTALL_LF} [lrn]  Uninstalls macMOTD. Optionally choose how the scripts in ${UPDATE_MOTD_D_DEST} are handled:
                              ${MM_GLYPH_BULLET} [l]eave as-is (${MM_ESC_EMPH}default${MM_ESC_EMPH_END}).
                              ${MM_GLYPH_BULLET} [r]ename rather than delete.
-                             ${MM_GLYPH_BULLET} [n]uke everything (${MM_ESC_EMPH}irreverisble!${MM_ESC_EMPH_END}).
-    ${MM_LOG_SF}, ${MM_LOG_LF}       <path> Overrides the default log file path (${MOTD_LOG_FILE}).
+                             ${MM_GLYPH_BULLET} [n]uke everything (${MM_ESC_EMPH}irreversible!${MM_ESC_EMPH_END}).
+    ${MM_LOG_SF}, ${MM_LOG_LF}       <path> Overrides the default log file path (${MOTD_DEFAULT_LOG_FILE}). May only be used in conjunction with ${MM_INSTALL_SF}/${MM_INSTALL_LF}.
     ${MM_FREQUENCY_SF}, ${MM_FREQUENCY_LF} <secs> Overrides the default MOTD regeneration frequency (${MOTD_REGEN_FREQUENCY}sec).
     ${MM_DEBUG_SF}, ${MM_DEBUG_LF}            Enables debug mode, which results in more detailed output.
     ${MM_VERSION_SF}, ${MM_VERSION_LF}          Prints version information.
@@ -542,6 +554,23 @@ _mm_main() {
                   "${MM_GENERATE_SF}/${MM_GENERATE_LF} are overlapping; only one" \
                   "may be specified at a time."
         _mm_print_usage
+    fi
+
+    # log file override sanity checks
+    if [[ "${MOTD_LOG_FILE}" != "${MOTD_DEFAULT_LOG_FILE}" ]]; then
+        # disallowed: operation other than install + override log path
+        if [[ ${_install} = false ]]; then
+            _mm_error "The default log path may only be overridden at installation time (${MM_INSTALL_SF}/${MM_INSTALL_LF})."
+            _mm_print_usage
+        else
+            # ensure requested file path is writable
+            if touch "${MOTD_LOG_FILE}" 2>/dev/null; then
+                _mm_info "using log file '${MOTD_LOG_FILE}'."
+            else
+                _mm_error "unable to write to requested log file '${MOTD_LOG_FILE}'!"
+                _mm_print_usage
+            fi
+        fi
     fi
 
     if [[ ${_print_version} = true ]]; then
@@ -597,8 +626,7 @@ _uninstall_mode=MM_UNINSTALL_LEAVE
 _debug=false
 _print_version=false
 
-for (( i=0;i<=${_argc};i++ )); do
-    [[ -z "${_argv[i]}" ]] && continue
+for (( i=1;i<=${_argc};i++ )); do
     _mm_debug "evaluating option: '${_argv[i]}'..."
     case ${_argv[i]} in
         ${MM_INSTALL_SF}|${MM_INSTALL_LF})
@@ -640,13 +668,7 @@ for (( i=0;i<=${_argc};i++ )); do
         ;;
         ${MM_LOG_SF}|${MM_LOG_LF})
             if _mm_validate_cli_arg "${_argv[i]}" "${_argv[i+1]}" "${i}" "${_argc}"; then
-                if touch "${_argv[i+1]}" 2>/dev/null; then
-                    _mm_info "using log file '${_argv[i+1]}'."
-                    MOTD_LOG_FILE="${_argv[i+1]}"
-                else
-                    _mm_error "unable to write to requested log file '${_argv[i+1]}'!"
-                    _mm_print_usage
-                fi
+                MOTD_LOG_FILE="${_argv[i+1]}"
                 (( i++ ))
                 continue
             fi
