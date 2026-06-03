@@ -226,8 +226,12 @@ mm_get_term_cols() {
 # $1: The name of a variable containing an array of lines to print.
 # $2: The lowest number of columns to use (leave empty to use MM_DEFAULT_MIN_COLS).
 mm_print_hcenter() {
+    if [[ -z "${1}" ]]; then
+        false; return;
+    fi
+
     local min_cols="${MM_DEFAULT_MIN_COLS}"
-    mm_is_number "${1}" && min_cols="${1}"
+    mm_is_number "${2}" && min_cols="${2}"
 
     _tput_cols="${min_cols}"
     mm_get_term_cols "tput_cols"
